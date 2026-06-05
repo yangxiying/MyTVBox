@@ -43,6 +43,7 @@ struct PlayerControlsView: View {
 
     @ObservedObject var viewModel: VideoPlayerViewModel
     @Binding var isVisible: Bool
+    @Binding var isFullscreen: Bool
 
     let onClose: () -> Void
     let onToggleEpisodes: () -> Void
@@ -228,7 +229,9 @@ struct PlayerControlsView: View {
                 }
 
                 Button(action: onToggleFullscreen) {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    Image(systemName: isFullscreen
+                          ? "arrow.down.right.and.arrow.up.left"
+                          : "arrow.up.left.and.arrow.down.right")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(PlayerTheme.textHigh)
                         .frame(width: 34, height: 28)

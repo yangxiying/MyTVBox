@@ -73,6 +73,7 @@ struct VideoPlayerView: View {
                 PlayerControlsView(
                     viewModel: viewModel,
                     isVisible: $controlsVisible,
+                    isFullscreen: $isFullscreen,
                     onClose: {
                         viewModel.saveProgress()
                         dismiss()
@@ -85,6 +86,11 @@ struct VideoPlayerView: View {
                     },
                     onToggleFullscreen: {
                         isFullscreen.toggle()
+                        if isFullscreen {
+                            OrientationManager.forceLandscape()
+                        } else {
+                            OrientationManager.forcePortrait()
+                        }
                         scheduleAutoHide()
                     }
                 )
@@ -148,6 +154,10 @@ struct VideoPlayerView: View {
         .onDisappear {
             viewModel.saveProgress()
             hideTask?.cancel()
+            // 退出播放器时恢复竖屏
+            if isFullscreen {
+                OrientationManager.forcePortrait()
+            }
         }
     }
 

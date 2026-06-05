@@ -49,10 +49,12 @@ jobs:
       - name: Generate Release Tag
         id: tag
         run: |
-          TAG="v1.0.0-build.$(date +'%Y%m%d-%H%M%S')"
-          RELEASE_NAME="MyTVBox Build $(date +'%Y-%m-%d %H:%M')"
+          VERSION=$(grep 'MARKETING_VERSION' project.yml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          TAG="v${VERSION}-build.$(date +'%Y%m%d-%H%M%S')"
+          RELEASE_NAME="MyTVBox v${VERSION} Build $(date +'%Y-%m-%d %H:%M')"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "release_name=$RELEASE_NAME" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -60,8 +62,9 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: ${{ steps.tag.outputs.release_name }}
           body: |
-            ## MyTVBox IPA Build
+            ## MyTVBox v${{ steps.tag.outputs.version }} IPA Build
 
+            - **Version:** ${{ steps.tag.outputs.version }}
             - **Commit:** ${{ github.sha }}
             - **Build Time:** ${{ steps.tag.outputs.release_name }}
             - **Branch:** ${{ github.ref_name }}
