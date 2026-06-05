@@ -213,8 +213,8 @@ final class VideoPlayerViewModel: ObservableObject {
         // 重新挂载状态观察
         statusObservation?.invalidate()
         statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
-            Task { @MainActor in
-                guard let self else { return }
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
                 switch item.status {
                 case .readyToPlay:
                     self.isLoading = false
@@ -247,8 +247,9 @@ final class VideoPlayerViewModel: ObservableObject {
             object: item,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
-                self?.playNextEpisode()
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                self.playNextEpisode()
             }
         }
     }
@@ -257,8 +258,8 @@ final class VideoPlayerViewModel: ObservableObject {
         // Time
         let interval = CMTime(seconds: 0.5, preferredTimescale: 600)
         timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
-            Task { @MainActor in
-                guard let self else { return }
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
                 self.currentTime = time.seconds.isFinite ? time.seconds : 0
                 if self.duration <= 0,
                    let dur = self.player.currentItem?.duration.seconds,
@@ -269,8 +270,9 @@ final class VideoPlayerViewModel: ObservableObject {
         }
         // Rate / playing
         rateObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
-            Task { @MainActor in
-                self?.isPlaying = (player.timeControlStatus == .playing)
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                self.isPlaying = (player.timeControlStatus == .playing)
             }
         }
     }

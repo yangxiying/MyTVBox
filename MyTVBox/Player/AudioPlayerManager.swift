@@ -88,8 +88,9 @@ final class AudioPlayerManager: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
-                self?.handlePlaybackEnd()
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                self.handlePlaybackEnd()
             }
         }
     }
@@ -190,7 +191,7 @@ final class AudioPlayerManager: ObservableObject {
             forInterval: interval,
             queue: .main
         ) { [weak self] time in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self = self else { return }
                 let t = CMTimeGetSeconds(time)
                 if t.isFinite { self.currentTime = t }
@@ -281,7 +282,7 @@ final class AudioPlayerManager: ObservableObject {
         let target = max(0, time)
         let cm = CMTime(seconds: target, preferredTimescale: 600)
         player?.seek(to: cm, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self = self else { return }
                 self.currentTime = target
                 var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
@@ -319,7 +320,7 @@ final class AudioPlayerManager: ObservableObject {
         sleepTimerRemaining = total
 
         sleepTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self = self else { return }
                 guard let r = self.sleepTimerRemaining else { return }
                 let nr = r - 1
@@ -360,40 +361,40 @@ final class AudioPlayerManager: ObservableObject {
         let cc = MPRemoteCommandCenter.shared()
 
         cc.playCommand.addTarget { [weak self] _ in
-            Task { @MainActor in self?.resume() }
+            Task { @MainActor [weak self] in self?.resume() }
             return .success
         }
         cc.pauseCommand.addTarget { [weak self] _ in
-            Task { @MainActor in self?.pause() }
+            Task { @MainActor [weak self] in self?.pause() }
             return .success
         }
         cc.togglePlayPauseCommand.addTarget { [weak self] _ in
-            Task { @MainActor in self?.toggle() }
+            Task { @MainActor [weak self] in self?.toggle() }
             return .success
         }
         cc.nextTrackCommand.addTarget { [weak self] _ in
-            Task { @MainActor in self?.next() }
+            Task { @MainActor [weak self] in self?.next() }
             return .success
         }
         cc.previousTrackCommand.addTarget { [weak self] _ in
-            Task { @MainActor in self?.previous() }
+            Task { @MainActor [weak self] in self?.previous() }
             return .success
         }
         cc.changePlaybackPositionCommand.addTarget { [weak self] event in
             guard let e = event as? MPChangePlaybackPositionCommandEvent else {
                 return .commandFailed
             }
-            Task { @MainActor in self?.seek(to: e.positionTime) }
+            Task { @MainActor [weak self] in self?.seek(to: e.positionTime) }
             return .success
         }
         cc.skipForwardCommand.preferredIntervals = [15]
         cc.skipForwardCommand.addTarget { [weak self] _ in
-            Task { @MainActor in self?.skipForward(15) }
+            Task { @MainActor [weak self] in self?.skipForward(15) }
             return .success
         }
         cc.skipBackwardCommand.preferredIntervals = [15]
         cc.skipBackwardCommand.addTarget { [weak self] _ in
-            Task { @MainActor in self?.skipBackward(15) }
+            Task { @MainActor [weak self] in self?.skipBackward(15) }
             return .success
         }
     }

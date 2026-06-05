@@ -27,8 +27,8 @@ struct VideoCategory: Codable, Identifiable, Hashable {
         self.typeName = (try? c.decode(String.self, forKey: .typeName)) ?? ""
         if let s = try? c.decodeIfPresent(String.self, forKey: .typePid) {
             self.typePid = s
-        } else if let i = try? c.decodeIfPresent(Int.self, forKey: .typePid) {
-            self.typePid = i.map { String($0) }
+        } else if let i = try? c.decode(Int.self, forKey: .typePid) {
+            self.typePid = String(i)
         } else {
             self.typePid = nil
         }
