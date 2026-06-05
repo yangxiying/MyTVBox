@@ -1,0 +1,69 @@
+import Foundation
+
+/// CMS / TVBox JSON 标准接口的视频 API 调用封装
+final class APIService {
+    static let shared = APIService()
+
+    private let network = NetworkManager.shared
+
+    private init() {}
+
+    // MARK: - 接口
+
+    /// 拉取分类
+    func fetchCategories(site: Site) async throws -> [VideoCategory] {
+        guard let api = site.api, !api.isEmpty else { return [] }
+        let url = appendQuery(api, params: ["ac": "class"])
+        let resp: APIResponse = try await network.decode(APIResponse.self, from: url)
+        return resp.categories ?? []
+    }
+
+    /// 拉取视频列表（包含分类与第一页）
+    /// 注意：标准 CMS 中 `ac=list` 返回简单列表，`ac=detail` 返回详情列表，多数 TVBox 接口用 detail
+    func fetchVideoList(site: Site, categoryId: String, page: Int) async throws -> APIResponse {
+        guard let api = site.api, !api.isEmpty else {
+            throw NetworkError.invalidURL
+        }
+        let url = appendQuery(api, params: [
+            "ac": "detail",
+            "t": categoryId,
+            "pg": String(page)
+        ])
+        return try await network.decode(APIResponse.self, from: url)
+    }
+
+    /// 拉取单个视频详情
+    func fetchVideoDetail(site: Site, vodId: String) async throws -> VideoDetail? {
+        guard let api = site.api, !api.isEmpty else { return nil }
+        let url = appendQuery(api, params: [
+            "ac": "detail",
+            "ids": vodId
+        ])
+        let resp: VideoDetailResponse = try await network.decode(VideoDetailResponse.self, from: url)
+        return resp.list?.first
+    }
+
+    /// 关键字搜索
+    func searchVideos(site: Site, keyword: String) async throws -> [VideoItem] {
+        guard let api = site.api, !api.isEmpty else { return [] }
+        let url = appendQuery(api, params: [
+            "ac": "detail",
+            "wd": keyword
+        ])
+        let resp: APIResponse = try await network.decode(APIResponse.self, from: url)
+        return resp.list ?? []
+    }
+
+    // MARK: - 工具
+
+    /// 在 URL 上拼接 query 参数（已转义）
+    private func appendQuery(_ urlString: String, params: [String: String]) -> String {
+        guard var comps = URLComponents(string: urlString) else { return urlString }
+        var items = comps.queryItems ?? []
+        for (k, v) in params {
+            items.append(URLQueryItem(name: k, value: v))
+        }
+        comps.queryItems = items
+        return comps.url?.absoluteString ?? urlString
+    }
+}

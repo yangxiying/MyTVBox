@@ -1,0 +1,438 @@
+import SwiftUI
+import UIKit
+
+/// 添加 / 编辑接口订阅 Sheet
+struct AddSubscriptionView: View {
+
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var appState: AppState
+
+    @State private var name: String = ""
+    @State private var url: String = ""
+    @State private var isSaving: Bool = false
+    @State private var errorText: String? = nil
+    @State private var showError: Bool = false
+    @State private var validationState: ValidationState = .idle
+    @FocusState private var focusedField: Field?
+
+    enum Field { case name, url }
+
+    enum ValidationState {
+        case idle
+        case checking
+        case ok
+        case fail(String)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                TVBoxTheme.atmosphere
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 22) {
+                        header
+
+                        // 名称
+                        FieldGroup(label: "名称", code: "01", hint: "可选 · 留空则自动以域名作为名称") {
+                            TextField("My TVBox Source", text: $name)
+                                .textFieldStyle(TerminalFieldStyle())
+                                .focused($focusedField, equals: .name)
+                                .submitLabel(.next)
+                                .onSubmit { focusedField = .url }
+                        }
+
+                        // URL
+                        FieldGroup(label: "接口地址", code: "02", hint: "支持 http(s) · 可含 user:pass@ 鉴权 · 支持 .md5 校验后缀") {
+                            VStack(spacing: 10) {
+                                TextField("http://user:pass@host/path/index.js.md5", text: $url, axis: .vertical)
+                                    .textFieldStyle(TerminalFieldStyle())
+                                    .lineLimit(2...4)
+                                    .keyboardType(.URL)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .focused($focusedField, equals: .url)
+
+                                HStack(spacing: 10) {
+                                    Button {
+                                        pasteFromClipboard()
+                                    } label: {
+                                        Label("从剪贴板粘贴", systemImage: "doc.on.clipboard")
+                                            .font(TVBoxTheme.text(12, weight: .semibold))
+                                            .foregroundStyle(TVBoxTheme.accent)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 8)
+                                            .background(
+                                                Capsule().stroke(TVBoxTheme.accent.opacity(0.5), lineWidth: 1)
+                                            )
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    if !url.isEmpty {
+                                        Button {
+                                            url = ""
+                                        } label: {
+                                            Label("清空", systemImage: "xmark")
+                                                .font(TVBoxTheme.text(12))
+                                                .foregroundStyle(TVBoxTheme.textSecondary)
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 8)
+                                                .background(
+                                                    Capsule().stroke(TVBoxTheme.stroke, lineWidth: 1)
+                                                )
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+
+                                    Spacer()
+                                }
+                            }
+                        }
+
+                        validationCard
+                            .animation(.easeInOut(duration: 0.25), value: validationStateKey)
+
+                        Spacer(minLength: 24)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 80)
+                }
+
+                // 底部固定操作区
+                VStack {
+                    Spacer()
+                    bottomBar
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 12)
+                }
+            }
+            .navigationTitle("新增接口")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(TVBoxTheme.bg, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消") { dismiss() }
+                        .foregroundStyle(TVBoxTheme.textSecondary)
+                }
+            }
+            .alert("出错了", isPresented: $showError) {
+                Button("好", role: .cancel) {}
+            } message: {
+                Text(errorText ?? "")
+            }
+            .onAppear { focusedField = .url }
+        }
+        .presentationDetents([.large])
+        .preferredColorScheme(.dark)
+    }
+
+    // MARK: - 顶部说明
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Rectangle().fill(TVBoxTheme.accent).frame(width: 3, height: 12)
+                Text("CONNECT // NEW SOURCE")
+                    .font(TVBoxTheme.mono(11, weight: .heavy))
+                    .tracking(2)
+                    .foregroundStyle(TVBoxTheme.accent)
+            }
+            Text("接入新的接口")
+                .font(TVBoxTheme.display(28))
+                .foregroundStyle(TVBoxTheme.textPrimary)
+            Text("URL 将被本地保存，并自动尝试解析以验证可用性。")
+                .font(TVBoxTheme.text(13))
+                .foregroundStyle(TVBoxTheme.textSecondary)
+        }
+    }
+
+    // MARK: - 验证状态卡片
+
+    private var validationCard: some View {
+        Group {
+            switch validationState {
+            case .idle:
+                EmptyView()
+            case .checking:
+                statusBanner(
+                    icon: "antenna.radiowaves.left.and.right",
+                    color: TVBoxTheme.accent,
+                    title: "正在握手…",
+                    detail: "正在向服务端请求配置数据"
+                )
+            case .ok:
+                statusBanner(
+                    icon: "checkmark.seal.fill",
+                    color: TVBoxTheme.accent,
+                    title: "连接成功",
+                    detail: "已解析到合法配置，可以保存"
+                )
+            case .fail(let msg):
+                statusBanner(
+                    icon: "exclamationmark.triangle.fill",
+                    color: TVBoxTheme.warn,
+                    title: "无法解析",
+                    detail: msg
+                )
+            }
+        }
+    }
+
+    private func statusBanner(icon: String, color: Color, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(color)
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(TVBoxTheme.text(13, weight: .bold))
+                    .foregroundStyle(TVBoxTheme.textPrimary)
+                Text(detail)
+                    .font(TVBoxTheme.mono(11))
+                    .foregroundStyle(TVBoxTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(color.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(color.opacity(0.5), lineWidth: 1)
+        )
+    }
+
+    private var validationStateKey: String {
+        switch validationState {
+        case .idle: return "idle"
+        case .checking: return "checking"
+        case .ok: return "ok"
+        case .fail(let m): return "fail:\(m)"
+        }
+    }
+
+    // MARK: - 底部操作区
+
+    private var bottomBar: some View {
+        HStack(spacing: 12) {
+            Button {
+                Task { await runTest() }
+            } label: {
+                Text(testButtonTitle)
+                    .font(TVBoxTheme.text(14, weight: .bold))
+                    .foregroundStyle(TVBoxTheme.accent)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(TVBoxTheme.accent.opacity(0.6), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .disabled(url.trimmed.isEmpty || isSaving)
+
+            Button {
+                Task { await save() }
+            } label: {
+                HStack(spacing: 8) {
+                    if isSaving {
+                        ProgressView()
+                            .tint(.black)
+                    }
+                    Text(isSaving ? "保存中…" : "保存接口")
+                        .font(TVBoxTheme.text(15, weight: .heavy))
+                }
+                .foregroundStyle(Color.black)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(
+                    LinearGradient(
+                        colors: [TVBoxTheme.accent, Color(red: 0.55, green: 1.0, blue: 0.95)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .shadow(color: TVBoxTheme.accent.opacity(0.4), radius: 14, x: 0, y: 6)
+                .opacity(canSave ? 1 : 0.4)
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSave)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(TVBoxTheme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(TVBoxTheme.stroke, lineWidth: 1)
+        )
+    }
+
+    private var testButtonTitle: String {
+        switch validationState {
+        case .checking: return "测试中…"
+        default: return "测试连接"
+        }
+    }
+
+    private var canSave: Bool {
+        !url.trimmed.isEmpty && !isSaving
+    }
+
+    // MARK: - 行为
+
+    private func pasteFromClipboard() {
+        if let s = UIPasteboard.general.string {
+            url = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        } else {
+            errorText = "剪贴板为空"
+            showError = true
+        }
+    }
+
+    /// 基础格式校验
+    private func basicValidate() -> String? {
+        let s = url.trimmed
+        if s.isEmpty { return "URL 不能为空" }
+        guard let parsed = URL(string: s) else { return "URL 格式不合法" }
+        guard let scheme = parsed.scheme?.lowercased(),
+              scheme == "http" || scheme == "https" else {
+            return "仅支持 http / https 协议"
+        }
+        guard let host = parsed.host, !host.isEmpty else { return "缺少主机地址" }
+        return nil
+    }
+
+    @MainActor
+    private func runTest() async {
+        if let err = basicValidate() {
+            validationState = .fail(err)
+            return
+        }
+        validationState = .checking
+        do {
+            _ = try await ConfigService.shared.loadConfig(from: url.trimmed)
+            validationState = .ok
+        } catch {
+            validationState = .fail(error.localizedDescription)
+        }
+    }
+
+    @MainActor
+    private func save() async {
+        if let err = basicValidate() {
+            errorText = err
+            showError = true
+            return
+        }
+        isSaving = true
+        defer { isSaving = false }
+
+        // 先尝试加载验证
+        validationState = .checking
+        let trimmedURL = url.trimmed
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let displayName = trimmedName.isEmpty ? autoName(from: trimmedURL) : trimmedName
+
+        do {
+            _ = try await ConfigService.shared.loadConfig(from: trimmedURL)
+            validationState = .ok
+        } catch {
+            // 仍允许保存，但提示用户
+            validationState = .fail(error.localizedDescription)
+            errorText = "无法解析配置：\(error.localizedDescription)\n仍可保存，稍后重试。"
+            showError = true
+        }
+
+        let sub = Subscription(name: displayName, url: trimmedURL)
+        appState.addSubscription(sub)
+        if appState.activeSubscriptionId == sub.id {
+            await appState.loadConfig()
+        }
+        dismiss()
+    }
+
+    private func autoName(from url: String) -> String {
+        if let u = URL(string: url), let host = u.host, !host.isEmpty {
+            return host
+        }
+        return "未命名接口"
+    }
+}
+
+// MARK: - 通用字段块
+
+private struct FieldGroup<Content: View>: View {
+    let label: String
+    let code: String
+    let hint: String
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Text(code)
+                    .font(TVBoxTheme.mono(10, weight: .bold))
+                    .foregroundStyle(TVBoxTheme.accent)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .stroke(TVBoxTheme.accent.opacity(0.5), lineWidth: 1)
+                    )
+                Text(label)
+                    .font(TVBoxTheme.text(13, weight: .heavy))
+                    .foregroundStyle(TVBoxTheme.textPrimary)
+            }
+            content()
+            Text(hint)
+                .font(TVBoxTheme.mono(10))
+                .foregroundStyle(TVBoxTheme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+// MARK: - 终端风格输入框
+
+private struct TerminalFieldStyle: TextFieldStyle {
+    func _body(configuration: TextField<Self._Label>) -> some View {
+        configuration
+            .font(TVBoxTheme.mono(13))
+            .foregroundStyle(TVBoxTheme.textPrimary)
+            .tint(TVBoxTheme.accent)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(TVBoxTheme.bg)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(TVBoxTheme.strokeStrong, lineWidth: 1)
+            )
+    }
+}
+
+// MARK: - 字符串工具
+
+private extension String {
+    var trimmed: String { trimmingCharacters(in: .whitespacesAndNewlines) }
+}
+
+// MARK: - 预览
+
+#Preview {
+    AddSubscriptionView()
+        .environmentObject(AppState())
+        .preferredColorScheme(.dark)
+}

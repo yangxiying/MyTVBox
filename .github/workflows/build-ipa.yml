@@ -1,0 +1,44 @@
+# Build IPA workflow for MyTVBox
+# Badge: ![Build IPA](https://github.com/<OWNER>/<REPO>/actions/workflows/build-ipa.yml/badge.svg)
+
+name: Build IPA
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Unsigned IPA
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Select Xcode version
+        run: |
+          sudo xcode-select -s /Applications/Xcode_15.2.app/Contents/Developer
+          xcodebuild -version
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build IPA
+        run: |
+          chmod +x build_ipa.sh
+          ./build_ipa.sh
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MyTVBox-IPA
+          path: build/ipa/MyTVBox.ipa
+          retention-days: 30
+          if-no-files-found: error
