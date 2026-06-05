@@ -24,6 +24,17 @@ struct TVBoxConfig: Codable {
         self.ijk = try c.decodeIfPresent([AnyCodable].self, forKey: .ijk)
     }
 
+    /// 便捷成员初始化器（用于代码构建配置实例）
+    init(spider: String? = nil, sites: [Site]? = nil, lives: [LiveSource]? = nil,
+         parses: [ParseRule]? = nil, flags: [String]? = nil, ijk: [AnyCodable]? = nil) {
+        self.spider = spider
+        self.sites = sites
+        self.lives = lives
+        self.parses = parses
+        self.flags = flags
+        self.ijk = ijk
+    }
+
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encodeIfPresent(spider, forKey: .spider)

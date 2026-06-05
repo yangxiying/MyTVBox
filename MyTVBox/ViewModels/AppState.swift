@@ -44,8 +44,8 @@ final class AppState: ObservableObject {
     private let didSeedDefaultKey = "MyTVBox.didSeedDefaultSubscription"
 
     // MARK: - 默认订阅源
-    private static let defaultSubscriptionName = "默认源"
-    private static let defaultSubscriptionURL = "http://wexfnw:wexfnw@cat.xn--4kq62z5rby2qupq9ub.top/index.js.md5"
+    static let defaultSubscriptionName = "默认源"
+    static let defaultSubscriptionURL = "http://wexfnw:wexfnw@cat.xn--4kq62z5rby2qupq9ub.top/index.js.md5"
 
     init() {
         loadSubscriptions()
@@ -157,17 +157,42 @@ final class AppState: ObservableObject {
         do {
             let cfg = try await ConfigService.shared.loadConfig(from: url)
             self.currentConfig = cfg
-            // 默认选中第一个站点
-            if currentSite == nil, let first = cfg.sites?.first {
-                self.currentSite = first
+
+            // 智能选择默认站点：优先 CMS 标准接口（type != 3），其次 type 3 中有真实 URL 的
+            let allSites = cfg.sites ?? []
+            let cmsSites = allSites.filter { $0.type != 3 }
+            let spiderWithURL = allSites.filter { $0.type == 3 && ($0.api ?? "").hasPrefix("http") }
+
+            if currentSite == nil || !allSites.contains(where: { $0.key == currentSite?.key }) {
+                self.currentSite = cmsSites.first ?? spiderWithURL.first ?? allSites.first
             }
+
             // 更新订阅时间戳
             if let sid = subscriptionId,
                let idx = subscriptions.firstIndex(where: { $0.id == sid }) {
                 subscriptions[idx].lastUpdated = Date()
                 saveSubscriptions()
             }
+
+            // 提示可用站点情况
+            let usableCount = cmsSites.count + spiderWithURL.count
+            let spiderOnlyCount = allSites.count - usableCount
+            if spiderOnlyCount > 0 && cmsSites.count > 0 {
+                self.errorMessage = "已加载 \(allSites.count) 个站点，其中 \(cmsSites.count) 个 CMS 源可用，\(spiderOnlyCount) 个 Spider 源需要 Spider 引擎支持（已自动过滤）。"
+            }
         } catch {
+            // 如果是默认 CatPaw 订阅源加载失败，使用 CatPawConfigBuilder 生成配置
+            if url == Self.defaultSubscriptionURL || CatPawConfigBuilder.isCatPawURL(url) {
+                do {
+                    let fallbackCfg = try await CatPawConfigBuilder.shared.buildConfig(baseURL: url)
+                    self.currentConfig = fallbackCfg
+                    if currentSite == nil, let first = fallbackCfg.sites?.first {
+                        self.currentSite = first
+                    }
+                    self.errorMessage = "原始接口为 Spider 模块，已自动使用基于 CatPawOpen 源码生成的内置源（\(fallbackCfg.sites?.count ?? 0) 个 CMS 源）。"
+                    return
+                } catch {}
+            }
             self.errorMessage = error.localizedDescription
             self.currentConfig = nil
         }

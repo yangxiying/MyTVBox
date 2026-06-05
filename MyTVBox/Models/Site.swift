@@ -31,16 +31,18 @@ struct Site: Codable, Identifiable, Hashable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.key = try c.decode(String.self, forKey: .key)
-        self.name = try c.decode(String.self, forKey: .name)
-        self.type = try c.decodeIfPresent(Int.self, forKey: .type) ?? 1
-        self.api = try c.decodeIfPresent(String.self, forKey: .api)
-        self.searchable = try c.decodeIfPresent(Int.self, forKey: .searchable)
-        self.quickSearch = try c.decodeIfPresent(Int.self, forKey: .quickSearch)
-        self.filterable = try c.decodeIfPresent(Int.self, forKey: .filterable)
-        self.playerType = try c.decodeIfPresent(Int.self, forKey: .playerType)
-        self.categories = try c.decodeIfPresent([String].self, forKey: .categories)
-        self.jar = try c.decodeIfPresent(String.self, forKey: .jar)
+        // key / name：优先 String，兜底 Int→String
+        self.key = c.decodeStringFlexible(.key) ?? "unknown"
+        self.name = c.decodeStringFlexible(.name) ?? "未命名"
+        // 所有数字字段使用宽松解码（兼容 Int / String / Double）
+        self.type = c.decodeIntFlexible(.type) ?? 1
+        self.api = try? c.decodeIfPresent(String.self, forKey: .api)
+        self.searchable = c.decodeIntFlexible(.searchable)
+        self.quickSearch = c.decodeIntFlexible(.quickSearch)
+        self.filterable = c.decodeIntFlexible(.filterable)
+        self.playerType = c.decodeIntFlexible(.playerType)
+        self.categories = try? c.decodeIfPresent([String].self, forKey: .categories)
+        self.jar = try? c.decodeIfPresent(String.self, forKey: .jar)
 
         // ext 可能是字符串、对象或数组，统一转字符串方便存储
         if let s = try? c.decodeIfPresent(String.self, forKey: .ext) {
@@ -55,6 +57,24 @@ struct Site: Codable, Identifiable, Hashable {
         } else {
             self.ext = nil
         }
+    }
+
+    /// 便捷成员初始化器（用于代码构建 Site 实例）
+    init(key: String, name: String, type: Int = 1, api: String? = nil,
+         searchable: Int? = nil, quickSearch: Int? = nil, filterable: Int? = nil,
+         playerType: Int? = nil, ext: String? = nil,
+         categories: [String]? = nil, jar: String? = nil) {
+        self.key = key
+        self.name = name
+        self.type = type
+        self.api = api
+        self.searchable = searchable
+        self.quickSearch = quickSearch
+        self.filterable = filterable
+        self.playerType = playerType
+        self.ext = ext
+        self.categories = categories
+        self.jar = jar
     }
 
     func encode(to encoder: Encoder) throws {

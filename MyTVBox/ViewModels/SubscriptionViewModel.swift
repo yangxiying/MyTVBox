@@ -123,6 +123,11 @@ final class SubscriptionViewModel: ObservableObject {
             _ = try await ConfigService.shared.loadConfig(from: url)
             return true
         } catch {
+            // 默认 Spider 模块 URL 有内置 fallback，视为可用
+            if url == AppState.defaultSubscriptionURL {
+                errorMessage = "Spider 模块接口，将使用内置源"
+                return true
+            }
             errorMessage = error.localizedDescription
             return false
         }

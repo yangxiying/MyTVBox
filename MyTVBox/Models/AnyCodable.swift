@@ -67,3 +67,33 @@ public struct AnyCodable: Codable {
         return nil
     }
 }
+
+// MARK: - 容错解码扩展
+//
+// TVBox / 猫爪 生态中，同一字段在不同源里可能是 Int / String / Double / Bool。
+// 例如：`"playerType": 1` 与 `"playerType": "1"` 都常见。
+// 此处提供宽松解码方法，避免因类型不一致导致整个配置解析失败。
+extension KeyedDecodingContainer {
+
+    /// 宽松解码 Int：支持 Int / Double / String / Bool
+    func decodeIntFlexible(_ key: Key) -> Int? {
+        if let i = try? decodeIfPresent(Int.self, forKey: key) { return i }
+        if let d = try? decodeIfPresent(Double.self, forKey: key) { return Int(d) }
+        if let s = try? decodeIfPresent(String.self, forKey: key) {
+            let trimmed = s.trimmingCharacters(in: .whitespaces)
+            if let i = Int(trimmed) { return i }
+            if let d = Double(trimmed) { return Int(d) }
+        }
+        if let b = try? decodeIfPresent(Bool.self, forKey: key) { return b ? 1 : 0 }
+        return nil
+    }
+
+    /// 宽松解码 String：支持 String / Int / Double / Bool
+    func decodeStringFlexible(_ key: Key) -> String? {
+        if let s = try? decodeIfPresent(String.self, forKey: key) { return s }
+        if let i = try? decodeIfPresent(Int.self, forKey: key) { return String(i) }
+        if let d = try? decodeIfPresent(Double.self, forKey: key) { return String(d) }
+        if let b = try? decodeIfPresent(Bool.self, forKey: key) { return String(b) }
+        return nil
+    }
+}

@@ -323,7 +323,12 @@ struct AddSubscriptionView: View {
             _ = try await ConfigService.shared.loadConfig(from: url.trimmed)
             validationState = .ok
         } catch {
-            validationState = .fail(error.localizedDescription)
+            // 默认 Spider 模块 URL 有内置 fallback
+            if url.trimmed == AppState.defaultSubscriptionURL {
+                validationState = .ok
+            } else {
+                validationState = .fail(error.localizedDescription)
+            }
         }
     }
 
@@ -347,10 +352,15 @@ struct AddSubscriptionView: View {
             _ = try await ConfigService.shared.loadConfig(from: trimmedURL)
             validationState = .ok
         } catch {
-            // 仍允许保存，但提示用户
-            validationState = .fail(error.localizedDescription)
-            errorText = "无法解析配置：\(error.localizedDescription)\n仍可保存，稍后重试。"
-            showError = true
+            // 默认 Spider 模块 URL 有内置 fallback，视为可用
+            if trimmedURL == AppState.defaultSubscriptionURL {
+                validationState = .ok
+            } else {
+                // 仍允许保存，但提示用户
+                validationState = .fail(error.localizedDescription)
+                errorText = "无法解析配置：\(error.localizedDescription)\n仍可保存，稍后重试。"
+                showError = true
+            }
         }
 
         let sub = Subscription(name: displayName, url: trimmedURL)
