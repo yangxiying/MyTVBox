@@ -42,7 +42,7 @@ struct SitePickerView: View {
             .navigationTitle("CHANNEL")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         isPresented = false
                     } label: {

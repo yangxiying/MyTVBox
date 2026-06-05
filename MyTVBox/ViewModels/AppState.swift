@@ -41,9 +41,15 @@ final class AppState: ObservableObject {
     private let subscriptionsKey = "MyTVBox.subscriptions"
     private let activeSubKey = "MyTVBox.activeSubscription"
     private let activeSiteKey = "MyTVBox.activeSite"
+    private let didSeedDefaultKey = "MyTVBox.didSeedDefaultSubscription"
+
+    // MARK: - 默认订阅源
+    private static let defaultSubscriptionName = "默认源"
+    private static let defaultSubscriptionURL = "http://wexfnw:wexfnw@cat.xn--4kq62z5rby2qupq9ub.top/index.js.md5"
 
     init() {
         loadSubscriptions()
+        seedDefaultSubscriptionIfNeeded()
     }
 
     // MARK: - 订阅持久化
@@ -58,6 +64,27 @@ final class AppState: ObservableObject {
            let uuid = UUID(uuidString: s) {
             self.activeSubscriptionId = uuid
         }
+    }
+
+    /// 首次启动时注入内置默认订阅源，并设为激活
+    private func seedDefaultSubscriptionIfNeeded() {
+        let defaults = UserDefaults.standard
+        // 已经注入过则不再重复
+        if defaults.bool(forKey: didSeedDefaultKey) { return }
+        // 用户已自行添加过订阅则不注入
+        guard subscriptions.isEmpty else {
+            defaults.set(true, forKey: didSeedDefaultKey)
+            return
+        }
+        let sub = Subscription(
+            name: Self.defaultSubscriptionName,
+            url: Self.defaultSubscriptionURL,
+            isActive: true
+        )
+        subscriptions.append(sub)
+        activeSubscriptionId = sub.id
+        saveSubscriptions()
+        defaults.set(true, forKey: didSeedDefaultKey)
     }
 
     func saveSubscriptions() {
