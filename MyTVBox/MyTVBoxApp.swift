@@ -93,10 +93,11 @@ enum OrientationManager {
 
         if #available(iOS 16.0, *) {
             windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: orientationMask(for: orientation))) { _ in }
-            // iOS 16+ 仍需设置 device orientation 以触发 SwiftUI 布局刷新
-            UIDevice.current.setValue(orientation.rawValue, forKey: "orientation")
+            windowScene.windows.first?.rootViewController?
+                .setNeedsUpdateOfSupportedInterfaceOrientations()
         } else {
             UIDevice.current.setValue(orientation.rawValue, forKey: "orientation")
+            UINavigationController.attemptRotationToDeviceOrientation()
         }
     }
 
