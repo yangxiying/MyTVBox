@@ -40,7 +40,11 @@ final class AudioPlayerManager: ObservableObject {
     private var timeObserver: Any?
     private var sleepTimer: Timer?
     private var endObserver: NSObjectProtocol?
+    private var interruptionObserver: NSObjectProtocol?
+    private var routeChangeObserver: NSObjectProtocol?
     private var remoteCommandsRegistered: Bool = false
+    /// 中断前是否在播放
+    private var wasPlayingBeforeInterruption = false
 
     // MARK: - 播放模式
 
@@ -92,6 +96,85 @@ final class AudioPlayerManager: ObservableObject {
                 guard let self = self else { return }
                 self.handlePlaybackEnd()
             }
+        }
+
+        // 音频中断处理（来电、Siri、闹钟等）
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] notification in
+            Task { @MainActor [weak self] in
+                self?.handleAudioInterruption(notification)
+            }
+        }
+
+        // 音频路由变化（耳机拔插、蓝牙断开等）
+        routeChangeObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] notification in
+            Task { @MainActor [weak self] in
+                self?.handleRouteChange(notification)
+            }
+        }
+    }
+
+    // MARK: - 音频中断处理
+
+    private func handleAudioInterruption(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: typeValue) else { return }
+
+        switch type {
+        case .began:
+            // 中断开始：记录状态并暂停
+            wasPlayingBeforeInterruption = isPlaying
+            if isPlaying {
+                player?.pause()
+                isPlaying = false
+                updateNowPlayingPlaybackRate(0)
+            }
+        case .ended:
+            // 中断结束：检查是否应恢复播放
+            var shouldResume = wasPlayingBeforeInterruption
+            if let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt {
+                let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
+                if !options.contains(.shouldResume) {
+                    shouldResume = false
+                }
+            }
+            if shouldResume {
+                // 重新激活音频会话
+                try? AVAudioSession.sharedInstance().setActive(true)
+                player?.play()
+                isPlaying = true
+                updateNowPlayingPlaybackRate(1)
+            }
+            wasPlayingBeforeInterruption = false
+        @unknown default:
+            break
+        }
+    }
+
+    // MARK: - 音频路由变化处理
+
+    private func handleRouteChange(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let reasonValue = userInfo[AVAudioSessionRouteChangeReasonKey] as? UInt,
+              let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else { return }
+
+        switch reason {
+        case .oldDeviceUnavailable:
+            // 耳机拔出 / 蓝牙断开 — 暂停播放
+            pause()
+        case .newDeviceAvailable:
+            // 新设备连接 — 不自动播放（避免意外出声）
+            break
+        default:
+            break
         }
     }
 
@@ -452,6 +535,14 @@ final class AudioPlayerManager: ObservableObject {
             NotificationCenter.default.removeObserver(obs)
             endObserver = nil
         }
+        if let obs = interruptionObserver {
+            NotificationCenter.default.removeObserver(obs)
+            interruptionObserver = nil
+        }
+        if let obs = routeChangeObserver {
+            NotificationCenter.default.removeObserver(obs)
+            routeChangeObserver = nil
+        }
         sleepTimer?.invalidate()
         sleepTimer = nil
         sleepTimerRemaining = nil
@@ -468,6 +559,7 @@ final class AudioPlayerManager: ObservableObject {
         duration = 0
         isPlaying = false
         isActive = false
+        wasPlayingBeforeInterruption = false
 
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }

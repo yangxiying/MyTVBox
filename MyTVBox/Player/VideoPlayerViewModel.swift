@@ -44,6 +44,8 @@ final class VideoPlayerViewModel: ObservableObject {
     private var statusObservation: NSKeyValueObservation?
     private var rateObservation: NSKeyValueObservation?
     private var endObserver: NSObjectProtocol?
+    private var bgObserver: NSObjectProtocol?
+    private var fgObserver: NSObjectProtocol?
     private var didRestoreProgress = false
 
     // MARK: - Init
@@ -68,6 +70,12 @@ final class VideoPlayerViewModel: ObservableObject {
             player.removeTimeObserver(token)
         }
         if let obs = endObserver {
+            NotificationCenter.default.removeObserver(obs)
+        }
+        if let obs = bgObserver {
+            NotificationCenter.default.removeObserver(obs)
+        }
+        if let obs = fgObserver {
             NotificationCenter.default.removeObserver(obs)
         }
         statusObservation?.invalidate()
@@ -201,6 +209,16 @@ final class VideoPlayerViewModel: ObservableObject {
         #endif
     }
 
+    /// 启用/禁用视频轨道（后台时禁用视频，音频继续播放）
+    private func setVideoTracksEnabled(_ enabled: Bool) {
+        guard let item = player.currentItem else { return }
+        for track in item.tracks {
+            if track.mediaType == .video {
+                track.isEnabled = enabled
+            }
+        }
+    }
+
     private func loadAndPlay(url: URL, restoreProgress: Bool, seekTo: Double? = nil) {
         isLoading = true
         currentTime = 0
@@ -273,6 +291,22 @@ final class VideoPlayerViewModel: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
                 self.isPlaying = (player.timeControlStatus == .playing)
+            }
+        }
+
+        // 后台/前台切换 — 禁用视频轨道以保活音频
+        bgObserver = NotificationCenter.default.addObserver(
+            forName: .appDidEnterBackground, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.setVideoTracksEnabled(false)
+            }
+        }
+        fgObserver = NotificationCenter.default.addObserver(
+            forName: .appWillEnterForeground, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.setVideoTracksEnabled(true)
             }
         }
     }

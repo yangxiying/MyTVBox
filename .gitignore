@@ -21,5 +21,8 @@ Package.resolved
 *.ipa
 *.xcarchive
 
+## OMC local state
+.omc/
+
 ## Logs
 *.log

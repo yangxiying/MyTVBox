@@ -1,7 +1,8 @@
 import SwiftUI
 import UIKit
+import AVFoundation
 
-// MARK: - AppDelegate（管理运行时方向锁定）
+// MARK: - AppDelegate（管理运行时方向锁定 + 后台音频）
 
 class AppDelegate: NSObject, UIApplicationDelegate {
     /// 当前允许的方向
@@ -16,6 +17,57 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     static var shared: AppDelegate? {
         UIApplication.shared.delegate as? AppDelegate
     }
+
+    // MARK: - 生命周期
+
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        // 注册后台/前台切换通知
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(didEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification, object: nil)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(willEnterForeground),
+            name: UIApplication.willEnterForegroundNotification, object: nil)
+
+        // 确保后台音频控制可被接收
+        application.beginReceivingRemoteControlEvents()
+
+        // 激活音频会话（全局激活一次，后续由各播放器按需调整）
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+        try? AVAudioSession.sharedInstance().setActive(true)
+
+        return true
+    }
+
+    // MARK: - 后台音频保活
+
+    @objc private func didEnterBackground() {
+        // 通知视频播放器：禁用视频轨道，只保留音频输出
+        // iOS 在后台不允许渲染视频，但允许音频继续
+        // 如果不禁用视频轨道，整个 AVPlayer 会被挂起
+        NotificationCenter.default.post(name: .appDidEnterBackground, object: nil)
+
+        // 重新激活音频会话（防止被系统 deactive）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            try? AVAudioSession.sharedInstance().setActive(true)
+        }
+    }
+
+    @objc private func willEnterForeground() {
+        // 通知视频播放器：恢复视频轨道
+        NotificationCenter.default.post(name: .appWillEnterForeground, object: nil)
+
+        // 确保音频会话活跃
+        try? AVAudioSession.sharedInstance().setActive(true)
+    }
+}
+
+// MARK: - 自定义通知
+
+extension Notification.Name {
+    static let appDidEnterBackground = Notification.Name("appDidEnterBackground")
+    static let appWillEnterForeground = Notification.Name("appWillEnterForeground")
 }
 
 // MARK: - 方向管理器
