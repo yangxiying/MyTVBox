@@ -48,6 +48,7 @@ struct PlayerControlsView: View {
     let onClose: () -> Void
     let onToggleEpisodes: () -> Void
     let onToggleFullscreen: () -> Void
+    var onBackgroundAudio: () -> Void = {}
     var onTapSurface: () -> Void = {}
 
     @State private var isScrubbing = false
@@ -233,6 +234,18 @@ struct PlayerControlsView: View {
                           ? "arrow.down.right.and.arrow.up.left"
                           : "arrow.up.left.and.arrow.down.right")
                         .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(PlayerTheme.textHigh)
+                        .frame(width: 34, height: 28)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(PlayerTheme.hairline, lineWidth: 1)
+                        )
+                }
+
+                // 后台音频播放
+                Button(action: onBackgroundAudio) {
+                    Image(systemName: "speaker.wave.2.circle")
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(PlayerTheme.textHigh)
                         .frame(width: 34, height: 28)
                         .background(

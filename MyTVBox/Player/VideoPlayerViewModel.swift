@@ -199,6 +199,22 @@ final class VideoPlayerViewModel: ObservableObject {
         configureAudioSession()
     }
 
+    // MARK: - Background Audio
+
+    /// 转后台音频播放 — 交给 AudioPlayerManager 接手，锁屏可听
+    func switchToBackgroundAudio() {
+        saveProgress()
+        guard let src = currentSource,
+              src.episodes.indices.contains(currentEpisodeIndex) else { return }
+        let ep = src.episodes[currentEpisodeIndex]
+        AudioPlayerManager.shared.play(episode: ep, in: src.episodes)
+        AudioPlayerManager.shared.updateNowPlayingInfo(
+            title: videoDetail.vodName,
+            artist: nil,
+            artwork: nil
+        )
+    }
+
     // MARK: - Internal helpers
 
     private func configureAudioSession() {

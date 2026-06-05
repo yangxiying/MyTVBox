@@ -7,7 +7,7 @@ options:
 settings:
   base:
     MARKETING_VERSION: "1.1.0"
-    CURRENT_PROJECT_VERSION: "2"
+    CURRENT_PROJECT_VERSION: "20260605.1"
     DEVELOPMENT_TEAM: ""
     CODE_SIGNING_ALLOWED: "NO"
     CODE_SIGNING_REQUIRED: "NO"
@@ -40,7 +40,7 @@ targets:
         CFBundleDisplayName: MyTVBox
         CFBundleIdentifier: com.mytvbox.app
         CFBundleShortVersionString: "1.1.0"
-        CFBundleVersion: "2"
+        CFBundleVersion: "20260605.1"
         MinimumOSVersion: "16.0"
         UILaunchScreen: {}
         UIBackgroundModes:

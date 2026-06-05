@@ -92,6 +92,10 @@ struct VideoPlayerView: View {
                             OrientationManager.forcePortrait()
                         }
                         scheduleAutoHide()
+                    },
+                    onBackgroundAudio: {
+                        viewModel.switchToBackgroundAudio()
+                        dismiss()
                     }
                 )
                 .ignoresSafeArea(edges: .horizontal)
