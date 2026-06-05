@@ -10,6 +10,9 @@ on:
       - master
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build Unsigned IPA
@@ -42,3 +45,27 @@ jobs:
           path: build/ipa/MyTVBox.ipa
           retention-days: 30
           if-no-files-found: error
+
+      - name: Generate Release Tag
+        id: tag
+        run: |
+          TAG="v1.0.0-build.$(date +'%Y%m%d-%H%M%S')"
+          RELEASE_NAME="MyTVBox Build $(date +'%Y-%m-%d %H:%M')"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "release_name=$RELEASE_NAME" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.release_name }}
+          body: |
+            ## MyTVBox IPA Build
+
+            - **Commit:** ${{ github.sha }}
+            - **Build Time:** ${{ steps.tag.outputs.release_name }}
+            - **Branch:** ${{ github.ref_name }}
+
+            下载下方 IPA 文件，通过 AltStore/Sideloadly 等工具安装到设备。
+          files: build/ipa/MyTVBox.ipa
+          prerelease: true
