@@ -213,7 +213,7 @@ final class VideoPlayerViewModel: ObservableObject {
     private func setVideoTracksEnabled(_ enabled: Bool) {
         guard let item = player.currentItem else { return }
         for track in item.tracks {
-            if track.mediaType == .video {
+            if let assetTrack = track.assetTrack, assetTrack.mediaType == .video {
                 track.isEnabled = enabled
             }
         }
