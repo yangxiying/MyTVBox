@@ -61,12 +61,14 @@ struct VideoPlayerView: View {
         ZStack {
             PlayerTheme.ink.ignoresSafeArea()
 
-            // 视频画面
-            AVPlayerControllerRepresentable(player: viewModel.player)
-                .ignoresSafeArea()
-                .onTapGesture {
-                    toggleControls()
-                }
+            // 视频画面（全屏时由 FullscreenPlayerView 接管）
+            if !isFullscreen {
+                AVPlayerControllerRepresentable(player: viewModel.player)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        toggleControls()
+                    }
+            }
 
             // HUD 覆盖
             if controlsVisible {
@@ -85,12 +87,7 @@ struct VideoPlayerView: View {
                         scheduleAutoHide()
                     },
                     onToggleFullscreen: {
-                        isFullscreen.toggle()
-                        if isFullscreen {
-                            OrientationManager.forceLandscape()
-                        } else {
-                            OrientationManager.forcePortrait()
-                        }
+                        isFullscreen = true
                         scheduleAutoHide()
                     },
                     onBackgroundAudio: {
@@ -151,6 +148,11 @@ struct VideoPlayerView: View {
         .statusBarHidden(isFullscreen)
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
+        .fullScreenCover(isPresented: $isFullscreen) {
+            FullscreenPlayerView(viewModel: viewModel) {
+                isFullscreen = false
+            }
+        }
         .onAppear {
             viewModel.start()
             scheduleAutoHide()
@@ -158,10 +160,6 @@ struct VideoPlayerView: View {
         .onDisappear {
             viewModel.saveProgress()
             hideTask?.cancel()
-            // 退出播放器时恢复竖屏
-            if isFullscreen {
-                OrientationManager.forcePortrait()
-            }
         }
     }
 
@@ -190,7 +188,7 @@ struct VideoPlayerView: View {
 
 // MARK: - iOS 16/17 onChange 兼容
 
-private extension View {
+extension View {
     @ViewBuilder
     func onChangeCompat<V: Equatable>(of value: V, perform: @escaping (V) -> Void) -> some View {
         if #available(iOS 17.0, *) {
