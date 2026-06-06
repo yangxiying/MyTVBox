@@ -19,19 +19,31 @@ final class CatPawConfigBuilder {
     // MARK: - 公共接口
 
     func buildConfig(baseURL: String) async throws -> TVBoxConfig {
-        // 1. 如果是 CatPaw URL，从打包 JS 中提取多站点
-        if Self.isCatPawURL(baseURL),
-           let cfg = await tryExtractFromBundle(baseURL: baseURL) {
-            return cfg
+        // 1. 如果是 CatPaw URL，从打包 JS 中提取 spider 站点
+        var catpawSites: [Site] = []
+        if Self.isCatPawURL(baseURL) {
+            if let cfg = await tryExtractFromBundle(baseURL: baseURL) {
+                catpawSites = cfg.sites
+            } else if let cfg = await tryServerConfig(baseURL: baseURL) {
+                catpawSites = cfg.sites
+            }
+        } else if let cfg = await tryServerConfig(baseURL: baseURL) {
+            catpawSites = cfg.sites
         }
 
-        // 2. 尝试 CatPaw 服务端 /config（服务端运行时）
-        if let cfg = await tryServerConfig(baseURL: baseURL) {
-            return cfg
+        // 2. 始终追加内置已知 CMS 源（确保数量充足）
+        let builtinSites = buildBuiltinCMSSources()
+
+        // 3. 合并去重（按 key 去重）
+        var seen = Set(catpawSites.map { $0.key })
+        var allSites = catpawSites
+        for site in builtinSites where !seen.contains(site.key) {
+            allSites.append(site)
+            seen.insert(site.key)
         }
 
-        // 3. 内置已知 CMS 源
-        return buildFromSourceCode()
+        guard !allSites.isEmpty else { return buildFromSourceCode() }
+        return TVBoxConfig(sites: allSites)
     }
 
     static func isCatPawURL(_ url: String) -> Bool {
@@ -207,6 +219,52 @@ final class CatPawConfigBuilder {
         ],
     ]
 
+    /// 将所有 knownCMSAPIs 转换为内置 CMS Site 列表
+    private func buildBuiltinCMSSources() -> [Site] {
+        let allAPIs: [(key: String, name: String, api: String)] = [
+            ("ffm3u8",     "非凡采集",   "https://cj.ffzyapi.com/api.php/provide/vod/from/ffm3u8"),
+            ("bfzy",       "暴风资源",   "https://bfzyapi.com/api.php/provide/vod"),
+            ("ikun",       "IKUN资源",   "https://ikunzyapi.com/api.php/provide/vod/from/ikm3u8"),
+            ("360zy",      "360资源",    "https://360zy.com/api.php/provide/vod"),
+            ("hw8",        "华为吧资源", "https://hw8.live/api.php/provide/vod"),
+            ("jinying",    "金鹰资源",   "https://jinyingzy.com/api.php/provide/vod"),
+            ("leshi",      "乐视资源",   "https://leshiapi.com/api.php/provide/vod"),
+            ("mdzy",       "墨斗资源",   "https://www.mdzyapi.com/api.php/provide/vod"),
+            ("niuniu",     "牛牛资源",   "https://api.niuniuzy.me/api.php/provide/vod"),
+            ("okzy",       "OK资源",     "https://okzyw9.com/api.php/provide/vod"),
+            ("hongniuzy",  "红牛资源",   "https://www.hongniuzy2.com/api.php/provide/vod"),
+            ("lyd",        "闪电资源",   "https://api.lydapi.com/api.php/provide/vod"),
+            ("wolongzy",   "卧龙资源",   "https://collect.wolongzyw.com/api.php/provide/vod"),
+            ("heimuer",    "黑木耳",     "https://json.heimuer.xyz/api.php/provide/vod"),
+            ("ffzy",       "非凡资源",   "https://cj.ffzyapi.com/api.php/provide/vod"),
+            ("tpzy",       "天盘资源",   "https://cj.tianpi.top/api.php/provide/vod"),
+            ("dbzy",       "豆瓣资源",   "https://www.dbzyapi.com/api.php/provide/vod"),
+            ("jszy",       "极速资源",   "https://www.jszyapi.com/api.php/provide/vod"),
+            ("sdzy",       "闪电资源",   "https://sdzyapi.com/api.php/provide/vod"),
+            ("hnzy",       "华人资源",   "https://hnzyapi.com/api.php/provide/vod"),
+            ("tianying",   "天鹰资源",   "https://api.tiany.top/api.php/provide/vod"),
+            ("kbzy",       "快播资源",   "https://www.kbzyapi.com/api.php/provide/vod"),
+            ("ckzy",       "超碰资源",   "https://www.ckzyw.com/api.php/provide/vod"),
+            ("feisu",      "飞速资源",   "https://www.feisuzyapi.com/api.php/provide/vod"),
+            ("baiwanzy",   "百万资源",   "https://www.baiwanzy.com/api.php/provide/vod"),
+            ("liangzi",    "量子资源",   "https://cj.lziapi.com/api.php/provide/vod"),
+            ("luobozy",    "萝卜资源",   "https://luobozyapi.com/api.php/provide/vod"),
+            ("maozhuatv",  "猫抓TV",     "https://www.mzryapi.com/api.php/provide/vod"),
+            ("mozidian",   "魔都资源",   "https://mozidian.com/api.php/provide/vod"),
+        ]
+
+        return allAPIs.map { src in
+            Site(
+                key: "builtin_\(src.key)",
+                name: src.name,
+                type: 1,
+                api: src.api,
+                searchable: 1,
+                quickSearch: 1
+            )
+        }
+    }
+
     // MARK: - 服务端配置获取（CatPaw 服务器运行时）
 
     private func tryServerConfig(baseURL: String) async -> TVBoxConfig? {
@@ -264,7 +322,7 @@ final class CatPawConfigBuilder {
         )
     }
 
-    // MARK: - 内置已知 CMS 源（fallback）
+    // MARK: - 服务端配置获取（CatPaw 服务器运行时）
 
     private func buildFromSourceCode() -> TVBoxConfig {
         var sites: [Site] = []
