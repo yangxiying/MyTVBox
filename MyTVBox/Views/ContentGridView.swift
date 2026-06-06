@@ -15,30 +15,37 @@ struct ContentGridView: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            let rows = stride(from: 0, to: items.count, by: columns).map {
-                Array(items[$0..<min($0 + columns, items.count)])
-            }
-            VStack(spacing: rowSpacing) {
-                ForEach(Array(rows.enumerated()), id: \.offset) { rowIdx, rowItems in
-                    HStack(alignment: .top, spacing: columnSpacing) {
-                        ForEach(Array(rowItems.enumerated()), id: \.element.id) { colIdx, item in
-                            let globalIdx = rowIdx * columns + colIdx
-                            Button {
-                                onItemTap(item)
-                            } label: {
-                                VideoCardView(item: item, index: globalIdx + 1)
-                            }
-                            .buttonStyle(CardPressStyle())
-                            .onAppear {
-                                let triggerIndex = max(0, items.count - 4)
-                                if globalIdx >= triggerIndex {
-                                    onLoadMore()
+            GeometryReader { geo in
+                let totalHSpacing = columnSpacing * CGFloat(columns - 1)
+                let cardWidth = (geo.size.width - totalHSpacing) / CGFloat(columns)
+                let rows = stride(from: 0, to: items.count, by: columns).map {
+                    Array(items[$0..<min($0 + columns, items.count)])
+                }
+                VStack(spacing: rowSpacing) {
+                    ForEach(Array(rows.enumerated()), id: \.offset) { rowIdx, rowItems in
+                        HStack(alignment: .top, spacing: columnSpacing) {
+                            ForEach(Array(rowItems.enumerated()), id: \.element.id) { colIdx, item in
+                                let globalIdx = rowIdx * columns + colIdx
+                                Button {
+                                    onItemTap(item)
+                                } label: {
+                                    VideoCardView(item: item, index: globalIdx + 1)
+                                }
+                                .buttonStyle(CardPressStyle())
+                                .frame(width: cardWidth)
+                                .onAppear {
+                                    let triggerIndex = max(0, items.count - 4)
+                                    if globalIdx >= triggerIndex {
+                                        onLoadMore()
+                                    }
                                 }
                             }
-                            if colIdx < columns - 1 { Spacer(minLength: 0) }
-                        }
-                        if rowItems.count < columns {
-                            ForEach(0..<(columns - rowItems.count), id: \.self) { _ in Spacer(minLength: 0) }
+                            // 奇数个 item 时右侧补空位保持列宽一致
+                            if rowItems.count < columns {
+                                ForEach(0..<(columns - rowItems.count), id: \.self) { _ in
+                                    Color.clear.frame(width: cardWidth)
+                                }
+                            }
                         }
                     }
                 }
