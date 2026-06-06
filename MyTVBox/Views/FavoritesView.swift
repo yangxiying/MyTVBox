@@ -356,8 +356,14 @@ private struct CardPressStyle: ButtonStyle {
     }
 }
 
-#Preview {
-    FavoritesView()
-        .environmentObject(AppState())
-        .preferredColorScheme(.dark)
+#if compiler(>=5.9)
+@available(iOS 17, *)
+struct Preview_FavoritesView: PreviewProvider {
+    static var previews: some View {
+        FavoritesView()
+            .environmentObject(AppState())
+            .preferredColorScheme(.dark)
+    }
 }
+#endif
+

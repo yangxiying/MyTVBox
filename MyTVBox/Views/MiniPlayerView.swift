@@ -155,11 +155,17 @@ struct MiniPlayerView: View {
 }
 
 #if DEBUG
-#Preview {
-    VStack {
-        Spacer()
-        MiniPlayerView()
+#if compiler(>=5.9)
+@available(iOS 17, *)
+struct Preview_MiniPlayerView: PreviewProvider {
+    static var previews: some View {
+        VStack {
+            Spacer()
+            MiniPlayerView()
+        }
+        .background(Color.gray)
     }
-    .background(Color.gray)
 }
+#endif
+
 #endif

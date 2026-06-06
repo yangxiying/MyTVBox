@@ -441,8 +441,14 @@ private extension String {
 
 // MARK: - 预览
 
-#Preview {
-    AddSubscriptionView()
-        .environmentObject(AppState())
-        .preferredColorScheme(.dark)
+#if compiler(>=5.9)
+@available(iOS 17, *)
+struct Preview_AddSubscriptionView: PreviewProvider {
+    static var previews: some View {
+        AddSubscriptionView()
+            .environmentObject(AppState())
+            .preferredColorScheme(.dark)
+    }
 }
+#endif
+

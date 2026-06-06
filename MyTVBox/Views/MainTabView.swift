@@ -211,8 +211,14 @@ struct SectionHeader: View {
     }
 }
 
-#Preview {
-    MainTabView()
-        .environmentObject(AppState())
-        .preferredColorScheme(.dark)
+#if compiler(>=5.9)
+@available(iOS 17, *)
+struct Preview_MainTabView: PreviewProvider {
+    static var previews: some View {
+        MainTabView()
+            .environmentObject(AppState())
+            .preferredColorScheme(.dark)
+    }
 }
+#endif
+

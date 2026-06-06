@@ -205,29 +205,35 @@ struct VideoCardView: View {
 }
 
 #if DEBUG
-#Preview {
-    ZStack {
-        TVBoxTheme.bg.ignoresSafeArea()
-        HStack(spacing: 14) {
-            VideoCardView(
-                item: VideoItem(
-                    vodId: "1", vodName: "示例剧集名称很长很长很长",
-                    vodPic: nil, vodRemarks: "更新至 12 集",
-                    vodYear: "2024", vodArea: "中国"
-                ),
-                index: 1
-            )
-            VideoCardView(
-                item: VideoItem(
-                    vodId: "2", vodName: "另一个示例",
-                    vodPic: "https://invalid.example/x.jpg",
-                    vodRemarks: "HD"
-                ),
-                index: 2
-            )
+#if compiler(>=5.9)
+@available(iOS 17, *)
+struct Preview_VideoCardView: PreviewProvider {
+    static var previews: some View {
+        ZStack {
+            TVBoxTheme.bg.ignoresSafeArea()
+            HStack(spacing: 14) {
+                VideoCardView(
+                    item: VideoItem(
+                        vodId: "1", vodName: "示例剧集名称很长很长很长",
+                        vodPic: nil, vodRemarks: "更新至 12 集",
+                        vodYear: "2024", vodArea: "中国"
+                    ),
+                    index: 1
+                )
+                VideoCardView(
+                    item: VideoItem(
+                        vodId: "2", vodName: "另一个示例",
+                        vodPic: "https://invalid.example/x.jpg",
+                        vodRemarks: "HD"
+                    ),
+                    index: 2
+                )
+            }
+            .padding()
         }
-        .padding()
+        .preferredColorScheme(.dark)
     }
-    .preferredColorScheme(.dark)
 }
+#endif
+
 #endif

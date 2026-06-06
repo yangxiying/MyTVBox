@@ -199,7 +199,13 @@ struct AudioPlaylistView: View {
 }
 
 #if DEBUG
-#Preview {
-    AudioPlaylistView()
+#if compiler(>=5.9)
+@available(iOS 17, *)
+struct Preview_AudioPlaylistView: PreviewProvider {
+    static var previews: some View {
+        AudioPlaylistView()
+    }
 }
+#endif
+
 #endif

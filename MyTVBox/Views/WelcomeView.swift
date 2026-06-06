@@ -265,7 +265,13 @@ struct WelcomeView: View {
 
 // MARK: - 预览
 
-#Preview {
-    WelcomeView(showSubscriptionSheet: .constant(false))
-        .preferredColorScheme(.dark)
+#if compiler(>=5.9)
+@available(iOS 17, *)
+struct Preview_WelcomeView: PreviewProvider {
+    static var previews: some View {
+        WelcomeView(showSubscriptionSheet: .constant(false))
+            .preferredColorScheme(.dark)
+    }
 }
+#endif
+

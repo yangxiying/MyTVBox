@@ -27,8 +27,14 @@ struct ContentView: View {
     }
 }
 
-#Preview {
-    ContentView()
-        .environmentObject(AppState())
-        .preferredColorScheme(.dark)
+#if compiler(>=5.9)
+@available(iOS 17, *)
+struct Preview_ContentView: PreviewProvider {
+    static var previews: some View {
+        ContentView()
+            .environmentObject(AppState())
+            .preferredColorScheme(.dark)
+    }
 }
+#endif
+

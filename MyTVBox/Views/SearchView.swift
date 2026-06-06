@@ -491,9 +491,15 @@ private struct CardPressStyle: ButtonStyle {
 }
 
 #if DEBUG
-#Preview {
-    SearchView()
-        .environmentObject(AppState())
-        .preferredColorScheme(.dark)
+#if compiler(>=5.9)
+@available(iOS 17, *)
+struct Preview_SearchView: PreviewProvider {
+    static var previews: some View {
+        SearchView()
+            .environmentObject(AppState())
+            .preferredColorScheme(.dark)
+    }
 }
+#endif
+
 #endif

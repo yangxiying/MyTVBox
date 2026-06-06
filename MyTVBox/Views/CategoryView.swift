@@ -243,9 +243,15 @@ struct CategoryView: View {
 }
 
 #if DEBUG
-#Preview {
-    CategoryView()
-        .environmentObject(AppState())
-        .preferredColorScheme(.dark)
+#if compiler(>=5.9)
+@available(iOS 17, *)
+struct Preview_CategoryView: PreviewProvider {
+    static var previews: some View {
+        CategoryView()
+            .environmentObject(AppState())
+            .preferredColorScheme(.dark)
+    }
 }
+#endif
+
 #endif

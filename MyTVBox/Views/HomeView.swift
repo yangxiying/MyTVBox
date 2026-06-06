@@ -273,9 +273,15 @@ struct HomeView: View {
 }
 
 #if DEBUG
-#Preview {
-    HomeView()
-        .environmentObject(AppState())
-        .preferredColorScheme(.dark)
+#if compiler(>=5.9)
+@available(iOS 17, *)
+struct Preview_HomeView: PreviewProvider {
+    static var previews: some View {
+        HomeView()
+            .environmentObject(AppState())
+            .preferredColorScheme(.dark)
+    }
 }
+#endif
+
 #endif

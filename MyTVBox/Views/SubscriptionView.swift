@@ -348,10 +348,16 @@ private extension Date {
 
 // MARK: - 预览
 
-#Preview {
-    NavigationStack {
-        SubscriptionView()
-            .environmentObject(AppState())
+#if compiler(>=5.9)
+@available(iOS 17, *)
+struct Preview_SubscriptionView: PreviewProvider {
+    static var previews: some View {
+        NavigationStack {
+            SubscriptionView()
+                .environmentObject(AppState())
+        }
+        .preferredColorScheme(.dark)
     }
-    .preferredColorScheme(.dark)
 }
+#endif
+

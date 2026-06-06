@@ -201,7 +201,13 @@ struct SleepTimerView: View {
 }
 
 #if DEBUG
-#Preview {
-    SleepTimerView()
+#if compiler(>=5.9)
+@available(iOS 17, *)
+struct Preview_SleepTimerView: PreviewProvider {
+    static var previews: some View {
+        SleepTimerView()
+    }
 }
+#endif
+
 #endif
