@@ -1,19 +1,15 @@
 import Foundation
 
-/// 参考 CatPawOpen 源码的配置生成器
+/// CatPaw Spider 配置生成器
 ///
-/// CatPawOpen 是一个 Node.js Fastify 服务器，在猫爪/TVBox app 的 JS 引擎中运行。
-/// `index.js.md5` 返回 MD5 哈希，去掉 `.md5` 后返回的是打包好的 JS 模块代码（非 JSON 配置）。
+/// 从 CatPaw `.js.md5` URL 获取打包好的 JS 源码，
+/// 通过正则提取各 spider 的 meta 信息，配合已知 CMS API 地址生成多站点配置。
 ///
-/// 本模块通过以下方式生成可用配置：
-/// 1. 尝试请求 CatPaw 服务端的 `/config` 端点获取动态配置
-/// 2. 基于源码中已知的 CMS 标准接口直接构建配置（ffm3u8 等）
-///
-/// 源码分析：
-/// - ffm3u8: 标准 CMS `https://cj.ffzyapi.com/api.php/provide/vod/from/ffm3u8` → 可直接使用
-/// - kunyu77: 自定义 API + RSA 签名 → 需移植
-/// - kkys: 自定义 API + AES 加密 → 需移植
-/// - alist/13bqg/copymanga: 网盘/小说/漫画 → 非视频 CMS
+/// 生成流程：
+/// 1. `.js.md5` → 取 MD5 → 下载打包 JS 源码
+/// 2. 正则提取 `meta: { key: '...', name: '...', type: N }`
+/// 3. 通过 knownCMSAPIs 映射生成 TVBoxConfig（type=1 CMS 站点）
+/// 4. 未知 spider 标记为 type=3（需 JS 引擎，当前显示为不可用）
 final class CatPawConfigBuilder {
 
     static let shared = CatPawConfigBuilder()
@@ -22,53 +18,174 @@ final class CatPawConfigBuilder {
 
     // MARK: - 公共接口
 
-    /// 尝试从 CatPaw 服务端或源码硬编码生成 TVBoxConfig
-    /// - Parameter baseURL: CatPaw 服务器基础 URL（含认证信息）
     func buildConfig(baseURL: String) async throws -> TVBoxConfig {
-        // 0. 如果是 .js.md5 模块 URL，尝试通过 Spider 引擎直接解析
+        // 1. 如果是 CatPaw URL，从打包 JS 中提取多站点
         if Self.isCatPawURL(baseURL),
-           let cfg = await trySpiderModule(baseURL: baseURL) {
+           let cfg = await tryExtractFromBundle(baseURL: baseURL) {
             return cfg
         }
 
-        // 1. 尝试从 CatPaw 服务端 /config 端点获取动态配置
+        // 2. 尝试 CatPaw 服务端 /config（服务端运行时）
         if let cfg = await tryServerConfig(baseURL: baseURL) {
             return cfg
         }
 
-        // 2. 使用源码中已知的 CMS 源构建配置
+        // 3. 内置已知 CMS 源
         return buildFromSourceCode()
     }
 
-    /// 检测 URL 是否为 CatPaw Spider 模块格式
     static func isCatPawURL(_ url: String) -> Bool {
         let lower = url.lowercased()
         return lower.hasSuffix(".js.md5") || lower.hasSuffix("/index.js")
     }
 
-    // MARK: - Spider 模块解析
+    // MARK: - 从打包 JS 中提取 spider meta
 
-    /// 通过 JavaScriptCore 引擎解析 CatPaw Spider JS 模块
-    private func trySpiderModule(baseURL: String) async -> TVBoxConfig? {
-        let key = "spider_\(baseURL.hashValue)"
-        let name = extractName(from: baseURL)
-        return await SpiderEngine.shared.buildConfig(jsURL: baseURL, siteKey: key, siteName: name)
+    /// 下载打包 JS 源码，正则提取所有 spider 的 meta，生成多站点配置
+    private func tryExtractFromBundle(baseURL: String) async -> TVBoxConfig? {
+        // 下载打包 JS（处理 .md5 → MD5 → JS 路径）
+        guard let jsCode = await fetchBundleCode(jsURL: baseURL) else {
+            print("[CatPawConfigBuilder] 下载 JS 源码失败: \(baseURL)")
+            return nil
+        }
+
+        // 提取所有 meta 对象
+        let metas = extractSpiderMetas(from: jsCode)
+        guard !metas.isEmpty else {
+            print("[CatPawConfigBuilder] 未提取到 spider meta")
+            return nil
+        }
+
+        print("[CatPawConfigBuilder] 提取到 \(metas.count) 个 spider: \(metas.map { $0.key }.joined(separator: ", "))")
+
+        // 每个 spider 生成一个 Site
+        var sites: [Site] = []
+        for meta in metas {
+            guard let api = knownCMSAPIs[meta.key] else {
+                // 未知 CMS 的 spider 标记为 type=3（需 JS 引擎）
+                sites.append(Site(
+                    key: "catpaw_\(meta.key)",
+                    name: meta.name,
+                    type: 3,
+                    api: nil,
+                    searchable: meta.key == "kkys" ? 1 : 0,
+                    quickSearch: 0
+                ))
+                continue
+            }
+
+            sites.append(Site(
+                key: "catpaw_\(meta.key)",
+                name: meta.name,
+                type: 1,
+                api: api,
+                searchable: 1,
+                quickSearch: 1,
+                filterable: 1,
+                categories: knownCategories[meta.key]
+            ))
+        }
+
+        guard !sites.isEmpty else { return nil }
+        return TVBoxConfig(sites: sites)
     }
 
-    private func extractName(from url: String) -> String {
-        if let host = URL(string: url)?.host { return host }
-        return url.components(separatedBy: "/").last ?? "Spider"
+    // MARK: - JS Bundle 下载
+
+    private func fetchBundleCode(jsURL: String) async -> String? {
+        let actualURL: String
+        if jsURL.lowercased().hasSuffix(".js.md5") {
+            guard let md5Data = try? await network.data(from: jsURL),
+                  let md5 = String(data: md5Data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  let baseURL = jsURL.components(separatedBy: ".md5").first else {
+                return nil
+            }
+            actualURL = "\(baseURL)/\(md5)"
+        } else {
+            actualURL = jsURL
+        }
+
+        guard let data = try? await network.data(from: actualURL),
+              let code = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        return code
     }
 
-    // MARK: - 服务端配置获取
+    // MARK: - Spider Meta 提取
 
-    /// 请求 CatPaw 服务器的 /config 端点
+    private struct SpiderMeta {
+        let key: String
+        let name: String
+        let type: Int
+    }
+
+    /// 从打包 JS 源码中用正则提取所有 `meta: { key: '...', name: '...', type: N }`
+    private func extractSpiderMetas(from jsCode: String) -> [SpiderMeta] {
+        // 匹配 meta: { key: 'ffm3u8', name: '非凡采集', type: 3 }
+        // 注意 key/name 顺序不固定，type 可能缺省（默认 3）
+        let pattern = #"meta\s*:\s*\{[^}]*key\s*:\s*['"]([^'"]+)['"][^}]*name\s*:\s*['"]([^'"]+)['"][^}]*(?:type\s*:\s*(\d+))?[^}]*\}"#
+
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return [] }
+
+        let range = NSRange(jsCode.startIndex..., in: jsCode)
+        let matches = regex.matches(in: jsCode, options: [], range: range)
+
+        var seen = Set<String>()
+        var results: [SpiderMeta] = []
+
+        for match in matches {
+            guard let keyRange = Range(match.range(at: 1), in: jsCode),
+                  let nameRange = Range(match.range(at: 2), in: jsCode) else { continue }
+
+            let key = String(jsCode[keyRange])
+            let name = String(jsCode[nameRange])
+            let type: Int
+            if let typeRange = Range(match.range(at: 3), in: jsCode) {
+                type = Int(String(jsCode[typeRange])) ?? 3
+            } else {
+                type = 3
+            }
+
+            guard !seen.contains(key) else { continue }
+            seen.insert(key)
+            results.append(SpiderMeta(key: key, name: name, type: type))
+        }
+
+        return results
+    }
+
+    // MARK: - 已知 CMS API 地址映射
+
+    /// CatPawOpen 各 spider 对应的 CMS 标准接口地址
+    /// 这些地址来自源码分析，是各 spider 实际请求的后端 API
+    private let knownCMSAPIs: [String: String] = [
+        // ffm3u8 — 非凡采集（标准 CMS，JSON API）
+        "ffm3u8": "https://cj.ffzyapi.com/api.php/provide/vod/from/ffm3u8",
+        // kkys — 快看影视（自定义 API，AES 加密响应）
+        // kunyu77 — 琨娱七七（自定义 API，RSA 签名）
+        // 这两个使用自定义协议，无法直接用 CMS API 替代
+        // 保留 key 用于显示名称，type=3 标记需 JS 引擎
+    ]
+
+    /// 已知分类列表（来自 index.config.js）
+    private let knownCategories: [String: [String]] = [
+        "ffm3u8": [
+            "国产剧", "香港剧", "韩国剧", "欧美剧", "台湾剧", "日本剧",
+            "海外剧", "泰国剧", "短剧", "动作片", "喜剧片", "爱情片",
+            "科幻片", "恐怖片", "剧情片", "战争片", "动漫片", "大陆综艺",
+            "港台综艺", "日韩综艺", "欧美综艺", "国产动漫", "日韩动漫",
+            "欧美动漫", "港台动漫", "海外动漫", "记录片",
+        ],
+    ]
+
+    // MARK: - 服务端配置获取（CatPaw 服务器运行时）
+
     private func tryServerConfig(baseURL: String) async -> TVBoxConfig? {
         guard let url = URL(string: baseURL),
               let scheme = url.scheme,
               let host = url.host else { return nil }
 
-        // 构建带认证的 /config URL
         var authPrefix = ""
         if let user = url.user, let password = url.password {
             authPrefix = "\(user):\(password)@"
@@ -84,12 +201,9 @@ final class CatPawConfigBuilder {
         return parseServerConfig(json)
     }
 
-    /// 解析 CatPaw 服务端 /config 返回的格式
-    /// 格式: { video: { sites: [...] }, read: { sites: [...] }, ... }
     private func parseServerConfig(_ json: [String: Any]) -> TVBoxConfig? {
         var allSites: [Site] = []
 
-        // 解析 video.sites
         if let video = json["video"] as? [String: Any],
            let sites = video["sites"] as? [[String: Any]] {
             for siteJSON in sites {
@@ -100,21 +214,14 @@ final class CatPawConfigBuilder {
         }
 
         guard !allSites.isEmpty else { return nil }
-
         return TVBoxConfig(sites: allSites)
     }
 
-    /// 解析单个 CatPaw 站点配置
-    /// 格式: { key: "ffm3u8", name: "非凡采集", type: 3, api: "/spider/ffm3u8/3" }
     private func parseCatPawSite(_ json: [String: Any]) -> Site? {
         guard let key = json["key"] as? String,
               let name = json["name"] as? String else { return nil }
 
         let type = json["type"] as? Int ?? 3
-
-        // CatPaw 的 api 是相对路径（如 /spider/ffm3u8/3），
-        // 在 iOS 中无法直接使用（需要 JS 引擎）
-        // 对于标准 CMS 蜘蛛，使用已知的直接 API 地址
         let directAPI = knownCMSAPIs[key]
 
         return Site(
@@ -129,34 +236,11 @@ final class CatPawConfigBuilder {
         )
     }
 
-    // MARK: - 源码硬编码配置
+    // MARK: - 内置已知 CMS 源（fallback）
 
-    /// CatPawOpen 源码中已知的 CMS 标准接口地址
-    /// 只有这些源可以在 iOS 上直接使用（无需 JS 引擎）
-    private let knownCMSAPIs: [String: String] = [
-        // ffm3u8 - 来自 nodejs/src/spider/video/ffm3u8.js + index.config.js
-        "ffm3u8": "https://cj.ffzyapi.com/api.php/provide/vod/from/ffm3u8",
-    ]
-
-    /// 已知的分类列表（来自 index.config.js）
-    private let knownCategories: [String: [String]] = [
-        "ffm3u8": [
-            "国产剧", "香港剧", "韩国剧", "欧美剧", "台湾剧", "日本剧",
-            "海外剧", "泰国剧", "短剧", "动作片", "喜剧片", "爱情片",
-            "科幻片", "恐怖片", "剧情片", "战争片", "动漫片", "大陆综艺",
-            "港台综艺", "日韩综艺", "欧美综艺", "国产动漫", "日韩动漫",
-            "欧美动漫", "港台动漫", "海外动漫", "记录片",
-        ],
-    ]
-
-    /// 从 CatPawOpen 源码构建 fallback 配置
-    /// 包含所有可直接在 iOS 上使用的 CMS 源
     private func buildFromSourceCode() -> TVBoxConfig {
         var sites: [Site] = []
 
-        // === ffm3u8 (非凡采集) ===
-        // 来源: nodejs/src/spider/video/ffm3u8.js
-        // 配置: nodejs/src/index.config.js → ffm3u8.url
         sites.append(Site(
             key: "catpaw_ffm3u8",
             name: "非凡采集",
@@ -168,8 +252,6 @@ final class CatPawConfigBuilder {
             categories: knownCategories["ffm3u8"]
         ))
 
-        // === 额外补充的常用 CMS 源（猫爪生态常用） ===
-        // 这些源来自 TVBox 社区，与 CatPawOpen 兼容
         let extraSources: [(key: String, name: String, api: String)] = [
             ("bfzy", "暴风资源", "https://bfzyapi.com/api.php/provide/vod"),
             ("ikun", "IKUN资源", "https://ikunzyapi.com/api.php/provide/vod/from/ikm3u8"),
