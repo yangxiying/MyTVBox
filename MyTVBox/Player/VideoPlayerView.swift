@@ -189,12 +189,8 @@ struct VideoPlayerView: View {
 // MARK: - iOS 16/17 onChange 兼容
 
 extension View {
-    @ViewBuilder
     func onChangeCompat<V: Equatable>(of value: V, perform: @escaping (V) -> Void) -> some View {
-        if #available(iOS 17.0, *) {
-            self.onChange(of: value) { _, newValue in perform(newValue) }
-        } else {
-            self.onChange(of: value, perform: perform)
-        }
+        // iOS 16 onChange(of:perform:) 在 iOS 17 仍可用（仅 deprecated），统一使用
+        self.onChange(of: value, perform: perform)
     }
 }
