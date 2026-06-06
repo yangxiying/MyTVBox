@@ -22,13 +22,13 @@ final class CatPawConfigBuilder {
         // 1. 如果是 CatPaw URL，从打包 JS 中提取 spider 站点
         var catpawSites: [Site] = []
         if Self.isCatPawURL(baseURL) {
-            if let cfg = await tryExtractFromBundle(baseURL: baseURL) {
-                catpawSites = cfg.sites
-            } else if let cfg = await tryServerConfig(baseURL: baseURL) {
-                catpawSites = cfg.sites
+            if let sites = (await tryExtractFromBundle(baseURL: baseURL))?.sites {
+                catpawSites = sites
+            } else if let sites = (await tryServerConfig(baseURL: baseURL))?.sites {
+                catpawSites = sites
             }
-        } else if let cfg = await tryServerConfig(baseURL: baseURL) {
-            catpawSites = cfg.sites
+        } else if let sites = (await tryServerConfig(baseURL: baseURL))?.sites {
+            catpawSites = sites
         }
 
         // 2. 始终追加内置已知 CMS 源（确保数量充足）
