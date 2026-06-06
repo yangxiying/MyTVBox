@@ -115,7 +115,7 @@ final class CatPawConfigBuilder {
             guard let md5Data = try? await network.data(from: jsURL),
                   let md5 = String(data: md5Data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
                   let baseURL = jsURL.components(separatedBy: ".md5").first else {
-                print("[CatPawConfigBuilder] fetchBundleCode: MD5 fetch failed for \(jsURL)")
+                print("[CatPawConfigBuilder] fetchBundleCode: MD5 fetch failed")
                 return nil
             }
             actualURL = "\(baseURL)/\(md5)"
@@ -132,19 +132,40 @@ final class CatPawConfigBuilder {
             return code
         }
 
-        // Fallback：对 .js.md5 URL，尝试跟随 .js 的 302 重定向获取实际内容
+        // Fallback：手动跟踪 .js 的 302 重定向，提取 CDN URL 后直接请求
         if jsURL.lowercased().hasSuffix(".js.md5"),
            let jsPath = jsURL.components(separatedBy: ".md5").first {
-            print("[CatPawConfigBuilder] fetchBundleCode: 尝试 redirect fallback \(jsPath)")
-            if let data = try? await network.data(from: jsPath),
+            print("[CatPawConfigBuilder] fetchBundleCode: 手动跟踪重定向 \(jsPath)")
+            if let redirectURL = await followRedirect(url: jsPath),
+               let data = try? await network.data(from: redirectURL),
                let code = String(data: data, encoding: .utf8),
                !code.contains("<html>") {
-                print("[CatPawConfigBuilder] fetchBundleCode: redirect 成功 (\(code.count) bytes)")
+                print("[CatPawConfigBuilder] fetchBundleCode: 重定向成功 (\(code.count) bytes) → \(redirectURL.prefix(80))")
                 return code
             }
         }
 
         print("[CatPawConfigBuilder] fetchBundleCode: 所有方式均失败")
+        return nil
+    }
+
+    /// 手动跟踪一次 302 重定向，返回最终 Location URL
+    private func followRedirect(url: String) async -> String? {
+        guard let nsURL = URL(string: url) else { return nil }
+        var request = URLRequest(url: nsURL)
+        request.httpMethod = "HEAD"
+        request.timeoutInterval = 10
+        // 不自动重定向
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 10
+        let session = URLSession(configuration: config)
+        guard let resp = try? await session.data(for: request).1 as? HTTPURLResponse else { return nil }
+        // 手动获取 Location header
+        if let loc = resp.value(forHTTPHeaderField: "Location") ?? resp.value(forHTTPHeaderField: "location") {
+            print("[CatPawConfigBuilder] followRedirect: \(resp.statusCode) → \(loc.prefix(100))")
+            return loc
+        }
+        print("[CatPawConfigBuilder] followRedirect: \(resp.statusCode), no Location header")
         return nil
     }
 
