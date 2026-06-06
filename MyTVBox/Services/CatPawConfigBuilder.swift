@@ -1,4 +1,5 @@
 import Foundation
+import JavaScriptCore
 
 /// CatPaw Spider 配置生成器
 ///
@@ -353,7 +354,6 @@ final class CatPawConfigBuilder {
 
     /// 用 JavaScriptContext 执行 bundle，提取混淆后的 spider meta
     private func extractSpiderMetasViaJS(_ jsCode: String) -> [SpiderMeta]? {
-        import JavaScriptCore
         let ctx = JSContext()!
         // 最小 shim
         ctx.evaluateScript("var console={log:function(){},warn:function(){},error:function(){},info:function(){}}")
@@ -361,9 +361,9 @@ final class CatPawConfigBuilder {
 
         // 从源码中找 meta:{ ... } 片段，在已加载的上下文中执行求值
         let pattern = #"meta\s*:\s*\{"#
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: []),
-              let fullRange = NSRange(jsCode.startIndex..., in: jsCode) else { return nil }
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return nil }
 
+        let fullRange = NSRange(jsCode.startIndex..., in: jsCode)
         let matches = regex.matches(in: jsCode, options: [], range: fullRange)
         guard !matches.isEmpty else { return nil }
 
