@@ -22,8 +22,9 @@ final class CatPawConfigBuilder {
         // 1. 如果是 CatPaw URL，从打包 JS 中提取 spider 站点
         var catpawSites: [Site] = []
         if Self.isCatPawURL(baseURL) {
-            if let result = (await tryExtractFromBundle(baseURL: baseURL)) {
-                catpawSites = result.sites
+            if let result = (await tryExtractFromBundle(baseURL: baseURL)),
+               let sites = result.sites {
+                catpawSites = sites
             } else if let sites = (await tryServerConfig(baseURL: baseURL))?.sites {
                 catpawSites = sites
             }
