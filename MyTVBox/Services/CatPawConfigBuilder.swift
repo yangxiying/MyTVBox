@@ -22,8 +22,8 @@ final class CatPawConfigBuilder {
         // 1. 如果是 CatPaw URL，从打包 JS 中提取 spider 站点
         var catpawSites: [Site] = []
         if Self.isCatPawURL(baseURL) {
-            if let sites = (await tryExtractFromBundle(baseURL: baseURL))?.sites {
-                catpawSites = sites
+            if let result = (await tryExtractFromBundle(baseURL: baseURL)) {
+                catpawSites = result.sites
             } else if let sites = (await tryServerConfig(baseURL: baseURL))?.sites {
                 catpawSites = sites
             }
@@ -74,14 +74,17 @@ final class CatPawConfigBuilder {
         var sites: [Site] = []
         for meta in metas {
             guard let api = knownCMSAPIs[meta.key] else {
-                // 未知 CMS 的 spider 标记为 type=3（需 JS 引擎）
+                // 未知 CMS 的 spider：标记为 type=3，存储 bundle code 供 JS 引擎执行
+                let siteKey = "catpaw_\(meta.key)"
+                SpiderContextManager.shared.registerModuleCode(key: siteKey, code: jsCode)
                 sites.append(Site(
-                    key: "catpaw_\(meta.key)",
+                    key: siteKey,
                     name: meta.name,
                     type: 3,
                     api: nil,
                     searchable: meta.key == "kkys" ? 1 : 0,
-                    quickSearch: 0
+                    quickSearch: 0,
+                    spiderKey: meta.key
                 ))
                 continue
             }

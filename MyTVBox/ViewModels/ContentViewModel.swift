@@ -27,7 +27,7 @@ final class ContentViewModel: ObservableObject {
         errorMessage = nil
         do {
             if site.type == 3, let code = SpiderContextManager.shared.moduleCode(for: site.key) {
-                let result = await SpiderEngine.shared.execute(jsCode: code, method: "home", args: [:])
+                let result = await SpiderEngine.shared.execute(jsCode: code, method: "home", args: [:], spiderKey: site.spiderKey)
                 if let classList = result?["class"] as? [[String: Any]] {
                     self.categories = classList.compactMap { dict in
                         guard let typeId = dict["type_id"] as? String ?? (dict["type_id"] as? Int).map(String.init),
@@ -60,7 +60,7 @@ final class ContentViewModel: ObservableObject {
         do {
             if site.type == 3, let code = SpiderContextManager.shared.moduleCode(for: site.key) {
                 let args: [String: Any] = ["id": typeId, "pg": 1]
-                let result = await SpiderEngine.shared.execute(jsCode: code, method: "category", args: args)
+                let result = await SpiderEngine.shared.execute(jsCode: code, method: "category", args: args, spiderKey: site.spiderKey)
                 guard loadedSiteKey == site.key else { return }
                 let parsed = parseSpiderList(result)
                 self.videoList = parsed.list
@@ -90,7 +90,7 @@ final class ContentViewModel: ObservableObject {
         do {
             if site.type == 3, let code = SpiderContextManager.shared.moduleCode(for: site.key) {
                 let args: [String: Any] = ["id": typeId, "pg": nextPage]
-                let result = await SpiderEngine.shared.execute(jsCode: code, method: "category", args: args)
+                let result = await SpiderEngine.shared.execute(jsCode: code, method: "category", args: args, spiderKey: site.spiderKey)
                 guard loadedSiteKey == site.key else { return }
                 let parsed = parseSpiderList(result)
                 let known = Set(self.videoList.map { $0.vodId })

@@ -22,11 +22,13 @@ struct Site: Codable, Identifiable, Hashable {
     let categories: [String]?
     /// jar 包地址（spider 站点用）
     let jar: String?
+    /// CatPaw bundle 中的原始 spider key（type=3 站点路由用）
+    let spiderKey: String?
 
     enum CodingKeys: String, CodingKey {
         case key, name, type, api
         case searchable, quickSearch, filterable, playerType
-        case ext, categories, jar
+        case ext, categories, jar, spiderKey
     }
 
     init(from decoder: Decoder) throws {
@@ -43,6 +45,7 @@ struct Site: Codable, Identifiable, Hashable {
         self.playerType = c.decodeIntFlexible(.playerType)
         self.categories = try? c.decodeIfPresent([String].self, forKey: .categories)
         self.jar = try? c.decodeIfPresent(String.self, forKey: .jar)
+        self.spiderKey = try? c.decodeIfPresent(String.self, forKey: .spiderKey)
 
         // ext 可能是字符串、对象或数组，统一转字符串方便存储
         if let s = try? c.decodeIfPresent(String.self, forKey: .ext) {
@@ -63,7 +66,8 @@ struct Site: Codable, Identifiable, Hashable {
     init(key: String, name: String, type: Int = 1, api: String? = nil,
          searchable: Int? = nil, quickSearch: Int? = nil, filterable: Int? = nil,
          playerType: Int? = nil, ext: String? = nil,
-         categories: [String]? = nil, jar: String? = nil) {
+         categories: [String]? = nil, jar: String? = nil,
+         spiderKey: String? = nil) {
         self.key = key
         self.name = name
         self.type = type
@@ -75,6 +79,7 @@ struct Site: Codable, Identifiable, Hashable {
         self.ext = ext
         self.categories = categories
         self.jar = jar
+        self.spiderKey = spiderKey
     }
 
     func encode(to encoder: Encoder) throws {
@@ -90,6 +95,7 @@ struct Site: Codable, Identifiable, Hashable {
         try c.encodeIfPresent(ext, forKey: .ext)
         try c.encodeIfPresent(categories, forKey: .categories)
         try c.encodeIfPresent(jar, forKey: .jar)
+        try c.encodeIfPresent(spiderKey, forKey: .spiderKey)
     }
 
     var isSearchable: Bool { (searchable ?? 0) == 1 }
