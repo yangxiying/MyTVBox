@@ -172,11 +172,7 @@ final class CatPawConfigBuilder {
     /// CatPawOpen 各 spider 对应的 CMS 标准接口地址
     /// 这些地址来自源码分析和 TVBox 社区，是各 spider 实际请求的后端 API
     private let knownCMSAPIs: [String: String] = [
-        // === CatPawOpen 内置 spider ===
         "ffm3u8": "https://cj.ffzyapi.com/api.php/provide/vod/from/ffm3u8",
-        // kkys / kunyu77 使用自定义加密 API，无法直接用 CMS 替代
-
-        // === 采集站（标准 CMS）===
         "ffzy":   "https://cj.ffzyapi.com/api.php/provide/vod",
         "bfzy":   "https://bfzyapi.com/api.php/provide/vod",
         "ikun":   "https://ikunzyapi.com/api.php/provide/vod/from/ikm3u8",
@@ -209,32 +205,8 @@ final class CatPawConfigBuilder {
         "guangsu": "https://api.guangsuapi.com/api.php/provide/vod",
         "taopian": "https://www.taopianapi.com/api.php/provide/vod",
         "wujin":  "https://api.wujinapi.me/api.php/provide/vod",
-        "longlong": "https://api.longlongdian.com/api.php/provide/vod",
         "kuaiche": "https://caiji.kczyapi.com/api.php/provide/vod",
         "mahua":  "https://www.mahuazy.com/api.php/provide/vod",
-        "kuaikan": "https://www.kuaikanzy.com/api.php/provide/vod",
-
-        // === 秒播站 ===
-        "guazisp":  "https://guaziapi.com/api.php/provide/vod",
-        "hjsp":     "https://hanjuapi.cc/api.php/provide/vod",
-        "bobosp":   "https://api.bobozy.com/api.php/provide/vod",
-        "yueyuesp": "https://yueyueapi.com/api.php/provide/vod",
-        "dubosp":   "https://duboapi.com/api.php/provide/vod",
-        "wencaisp": "https://wencaiapi.com/api.php/provide/vod",
-
-        // === 爱看系列 ===
-        "aikan":    "https://ikanapi.com/api.php/provide/vod",
-
-        // === 短剧源 ===
-        "dipindj":  "https://www.dipinapi.com/api.php/provide/vod",
-        "baidusp":  "https://baiduapi.cc/api.php/provide/vod",
-        "xiaoweidj": "https://www.xiaoweisp.com/api.php/provide/vod",
-
-        // === 听书源（音频）===
-        "yueting":  "https://www.yuetingts.com/api.php/provide/vod",
-        "jipin":    "https://www.jipints.com/api.php/provide/vod",
-        "wuyou":    "https://www.wuyouts.com/api.php/provide/vod",
-        "jingpin":  "https://www.jingpints.com/api.php/provide/vod",
     ]
 
     /// 已知分类列表（来自 index.config.js）
@@ -251,7 +223,7 @@ final class CatPawConfigBuilder {
     /// 将所有 knownCMSAPIs 转换为内置 CMS Site 列表
     private func buildBuiltinCMSSources() -> [Site] {
         let allAPIs: [(key: String, name: String, api: String)] = [
-            // === 采集站（标准 CMS）===
+            // === 采集站（已验证可用）===
             ("ffm3u8",     "非凡采集",   "https://cj.ffzyapi.com/api.php/provide/vod/from/ffm3u8"),
             ("ffzy",       "非凡资源",   "https://cj.ffzyapi.com/api.php/provide/vod"),
             ("bfzy",       "暴风资源",   "https://bfzyapi.com/api.php/provide/vod"),
@@ -281,54 +253,11 @@ final class CatPawConfigBuilder {
             ("luobozy",    "萝卜资源",   "https://luobozyapi.com/api.php/provide/vod"),
             ("maozhuatv",  "猫抓TV",     "https://www.mzryapi.com/api.php/provide/vod"),
             ("mozidian",   "魔都资源",   "https://mozidian.com/api.php/provide/vod"),
-
-            // === 秒播站（猫爪常见源）===
-            ("guazisp",    "瓜子秒播",   "https://guaziapi.com/api.php/provide/vod"),
-            ("hjsp",       "韩剧秒播",   "https://hanjuapi.cc/api.php/provide/vod"),
-            ("bobosp",     "伯伯秒播",   "https://api.bobozy.com/api.php/provide/vod"),
-            ("yueyuesp",   "悦悦秒播",   "https://yueyueapi.com/api.php/provide/vod"),
-            ("dubosp",     "独播秒播",   "https://duboapi.com/api.php/provide/vod"),
-            ("wencaisp",   "文才秒播",   "https://wencaiapi.com/api.php/provide/vod"),
-
-            // === 爱看系列 ===
-            ("aikan",      "爱看采集",   "https://ikanapi.com/api.php/provide/vod"),
-
-            // === 短剧源 ===
-            ("dipindj",    "帝品短剧",   "https://www.dipinapi.com/api.php/provide/vod"),
-            ("baidusp",    "百度短剧",   "https://baiduapi.cc/api.php/provide/vod"),
-            ("xiaoweidj",  "小薇短剧",   "https://www.xiaoweisp.com/api.php/provide/vod"),
-
-            // === 听书源（音频）===
-            ("yueting",    "悦听听书",   "https://www.yuetingts.com/api.php/provide/vod"),
-            ("jipin",      "极品听书",   "https://www.jipints.com/api.php/provide/vod"),
-            ("wuyou",      "无忧听书",   "https://www.wuyouts.com/api.php/provide/vod"),
-            ("jingpin",    "精品听书",   "https://www.jingpints.com/api.php/provide/vod"),
-
-            // === 其他知名采集站 ===
             ("guangsu",    "光速资源",   "https://api.guangsuapi.com/api.php/provide/vod"),
             ("taopian",    "淘片资源",   "https://www.taopianapi.com/api.php/provide/vod"),
             ("wujin",      "无尽资源",   "https://api.wujinapi.me/api.php/provide/vod"),
-            ("longlong",   "龙龙采集",   "https://api.longlongdian.com/api.php/provide/vod"),
             ("kuaiche",    "快车资源",   "https://caiji.kczyapi.com/api.php/provide/vod"),
             ("mahua",      "麻花资源",   "https://www.mahuazy.com/api.php/provide/vod"),
-            ("kuaikan",    "快看资源",   "https://www.kuaikanzy.com/api.php/provide/vod"),
-            ("xiandu",     "线路多",     "https://api.xianduapi.com/api.php/provide/vod"),
-            ("lzzy",       "量子采集",   "https://cj.lziapi.com/api.php/provide/vod"),
-            ("jbb",        "久久采集",   "https://www.jiujiumiao.com/api.php/provide/vod"),
-            ("hwsp",       "华为秒播",   "https://www.hwmiaobo.com/api.php/provide/vod"),
-            ("tianlai",    "天籁资源",   "https://api.tianlaijichang.com/api.php/provide/vod"),
-            ("feifan",     "非凡秒播",   "https://cj.ffzyapi.com/api.php/provide/vod/from/ffm3u8"),
-            ("sdzy2",      "闪电采集",   "https://sdzyapi.com/api.php/provide/vod"),
-            ("dandan",     "弹弹资源",   "https://www.dandanzy.com/api.php/provide/vod"),
-            ("tianyi",     "天翼资源",   "https://api.tiany.top/api.php/provide/vod"),
-            ("juji",       "剧酷资源",   "https://www.jukuapi.com/api.php/provide/vod"),
-            ("hbzy",       "HB资源",     "https://hbzyapi.com/api.php/provide/vod"),
-            ("dy1990",     "达达资源",   "https://www.dadazy.com/api.php/provide/vod"),
-            ("wolongzy2",  "卧龙采集",   "https://collect.wolongzyw.com/api.php/provide/vod"),
-            ("jyzy",       "金叶资源",   "https://www.jinyezy.com/api.php/provide/vod"),
-            ("lianbo",     "联播资源",   "https://cj.lianboapi.com/api.php/provide/vod"),
-            ("sdxc",       "闪电新款",   "https://sdxcapi.com/api.php/provide/vod"),
-            ("txzy",       "天兴资源",   "https://api.tianxingapi.com/api.php/provide/vod"),
         ]
 
         return allAPIs.map { src in
