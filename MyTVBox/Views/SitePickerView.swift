@@ -9,7 +9,9 @@ struct SitePickerView: View {
     @Binding var isPresented: Bool
 
     private var availableSites: [Site] {
-        (appState.currentConfig?.sites ?? []).filter { $0.type != 3 }
+        (appState.currentConfig?.sites ?? []).filter {
+            $0.type != 3 || $0.spiderKey != nil
+        }
     }
 
     var body: some View {
@@ -174,7 +176,7 @@ struct SitePickerView: View {
                 .font(TVBoxTheme.mono(11, weight: .heavy))
                 .tracking(3)
                 .foregroundStyle(TVBoxTheme.textSecondary)
-            Text("当前订阅中没有可用站点（已过滤 Spider/JAR）")
+            Text("当前订阅中没有可用站点")
                 .font(TVBoxTheme.text(12))
                 .foregroundStyle(TVBoxTheme.textMuted)
                 .multilineTextAlignment(.center)

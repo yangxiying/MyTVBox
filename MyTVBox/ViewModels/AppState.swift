@@ -160,8 +160,8 @@ final class AppState: ObservableObject {
 
             // 智能选择默认站点：优先 CMS 标准接口（type != 3），其次 type 3 中有真实 URL 的
             let allSites = cfg.sites ?? []
-            let cmsSites = allSites.filter { $0.type != 3 }
-            let spiderWithURL = allSites.filter { $0.type == 3 && ($0.api ?? "").hasPrefix("http") }
+            let cmsSites = allSites.filter { $0.type != 3 || $0.spiderKey != nil }
+            let spiderWithURL = allSites.filter { $0.type == 3 && $0.spiderKey == nil && ($0.api ?? "").hasPrefix("http") }
 
             if currentSite == nil || !allSites.contains(where: { $0.key == currentSite?.key }) {
                 self.currentSite = cmsSites.first ?? spiderWithURL.first ?? allSites.first
@@ -178,7 +178,7 @@ final class AppState: ObservableObject {
             let usableCount = cmsSites.count + spiderWithURL.count
             let spiderOnlyCount = allSites.count - usableCount
             if spiderOnlyCount > 0 && cmsSites.count > 0 {
-                self.errorMessage = "已加载 \(allSites.count) 个站点，其中 \(cmsSites.count) 个 CMS 源可用，\(spiderOnlyCount) 个 Spider 源需要 Spider 引擎支持（已自动过滤）。"
+                self.errorMessage = "已加载 \(allSites.count) 个站点，其中 \(cmsSites.count) 个可用，\(spiderOnlyCount) 个 Spider 源缺少 JS 引擎支持。"
             }
         } catch {
             // 如果是默认 CatPaw 订阅源加载失败，使用 CatPawConfigBuilder 生成配置
