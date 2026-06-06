@@ -99,7 +99,7 @@ private struct SettingsTab: View {
                         SectionHeader(title: "关于", code: "02")
                             .padding(.top, 8)
 
-                        infoRow(icon: "info.circle", title: "版本", value: "1.1.0 (20260605)")
+                        infoRow(icon: "info.circle", title: "版本", value: "1.2.0 (20260606)")
                         infoRow(icon: "lock.shield", title: "隐私", value: "所有数据仅本机存储")
                     }
                     .padding(.horizontal, 18)

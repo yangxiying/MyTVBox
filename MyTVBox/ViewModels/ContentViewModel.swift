@@ -19,25 +19,32 @@ final class ContentViewModel: ObservableObject {
     // MARK: - 私有
 
     private let apiService = APIService.shared
-    /// 记录最后一次拉取所属的站点 key，避免站点切换后旧请求结果污染
     private var loadedSiteKey: String?
 
     // MARK: - 接口
 
-    /// 加载分类列表（连同来自 ac=class 的 list 一并拿到的视频会被忽略，
-    /// 调用方需另外调用 loadVideoList 来拿数据）
     func loadCategories(site: Site) async {
         errorMessage = nil
         do {
-            let cats = try await apiService.fetchCategories(site: site)
-            self.categories = cats
+            if site.type == 3, let code = SpiderContextManager.shared.moduleCode(for: site.key) {
+                let result = SpiderEngine.shared.execute(jsCode: code, method: "home", args: [:])
+                if let classList = result?["class"] as? [[String: Any]] {
+                    self.categories = classList.compactMap { dict in
+                        guard let typeId = dict["type_id"] as? String ?? (dict["type_id"] as? Int).map(String.init),
+                              let typeName = dict["type_name"] as? String else { return nil }
+                        return VideoCategory(typeId: typeId, typeName: typeName)
+                    }
+                }
+            } else {
+                let cats = try await apiService.fetchCategories(site: site)
+                self.categories = cats
+            }
         } catch {
             self.errorMessage = error.localizedDescription
             self.categories = []
         }
     }
 
-    /// 加载某分类（nil 表示全站最新）的视频列表（重置为第 1 页）
     func loadVideoList(site: Site, category: VideoCategory?) async {
         guard !isLoading else { return }
         isLoading = true
@@ -51,21 +58,27 @@ final class ContentViewModel: ObservableObject {
 
         let typeId = category?.typeId ?? ""
         do {
-            let resp = try await apiService.fetchVideoList(
-                site: site, categoryId: typeId, page: 1
-            )
-            // 切换太快时，避免旧响应覆盖新站点
-            guard loadedSiteKey == site.key else { return }
-            self.videoList = resp.list ?? []
-            self.totalPages = max(1, resp.pagecount ?? 1)
-            self.currentPage = resp.page ?? 1
+            if site.type == 3, let code = SpiderContextManager.shared.moduleCode(for: site.key) {
+                let args: [String: Any] = ["id": typeId, "pg": 1]
+                let result = SpiderEngine.shared.execute(jsCode: code, method: "category", args: args)
+                guard loadedSiteKey == site.key else { return }
+                let parsed = parseSpiderList(result)
+                self.videoList = parsed.list
+                self.totalPages = max(1, parsed.pageCount)
+                self.currentPage = parsed.page
+            } else {
+                let resp = try await apiService.fetchVideoList(site: site, categoryId: typeId, page: 1)
+                guard loadedSiteKey == site.key else { return }
+                self.videoList = resp.list ?? []
+                self.totalPages = max(1, resp.pagecount ?? 1)
+                self.currentPage = resp.page ?? 1
+            }
         } catch {
             guard loadedSiteKey == site.key else { return }
             self.errorMessage = error.localizedDescription
         }
     }
 
-    /// 加载下一页（如果还有更多）
     func loadMore(site: Site) async {
         guard !isLoading, !isLoadingMore else { return }
         guard currentPage < totalPages else { return }
@@ -75,26 +88,60 @@ final class ContentViewModel: ObservableObject {
         let nextPage = currentPage + 1
         let typeId = currentCategory?.typeId ?? ""
         do {
-            let resp = try await apiService.fetchVideoList(
-                site: site, categoryId: typeId, page: nextPage
-            )
-            guard loadedSiteKey == site.key else { return }
-            if let items = resp.list {
-                // 简单去重（按 vod_id）
+            if site.type == 3, let code = SpiderContextManager.shared.moduleCode(for: site.key) {
+                let args: [String: Any] = ["id": typeId, "pg": nextPage]
+                let result = SpiderEngine.shared.execute(jsCode: code, method: "category", args: args)
+                guard loadedSiteKey == site.key else { return }
+                let parsed = parseSpiderList(result)
                 let known = Set(self.videoList.map { $0.vodId })
-                let appended = items.filter { !known.contains($0.vodId) }
+                let appended = parsed.list.filter { !known.contains($0.vodId) }
                 self.videoList.append(contentsOf: appended)
+                self.totalPages = max(self.totalPages, parsed.pageCount)
+                self.currentPage = nextPage
+            } else {
+                let resp = try await apiService.fetchVideoList(site: site, categoryId: typeId, page: nextPage)
+                guard loadedSiteKey == site.key else { return }
+                if let items = resp.list {
+                    let known = Set(self.videoList.map { $0.vodId })
+                    let appended = items.filter { !known.contains($0.vodId) }
+                    self.videoList.append(contentsOf: appended)
+                }
+                self.totalPages = max(self.totalPages, resp.pagecount ?? self.totalPages)
+                self.currentPage = resp.page ?? nextPage
             }
-            self.totalPages = max(self.totalPages, resp.pagecount ?? self.totalPages)
-            self.currentPage = resp.page ?? nextPage
         } catch {
-            // 加载更多的错误不弹整页，控制台输出即可
             print("[ContentViewModel] loadMore error: \(error.localizedDescription)")
         }
     }
 
-    /// 下拉刷新（保留当前分类）
     func refresh(site: Site) async {
         await loadVideoList(site: site, category: currentCategory)
+    }
+
+    // MARK: - Spider 结果解析
+
+    private struct SpiderListResult {
+        var list: [VideoItem]
+        var page: Int
+        var pageCount: Int
+    }
+
+    private func parseSpiderList(_ result: [String: Any]?) -> SpiderListResult {
+        guard let result = result else { return SpiderListResult(list: [], page: 1, pageCount: 1) }
+        let vodList = (result["list"] as? [[String: Any]] ?? []).map { dict -> VideoItem in
+            VideoItem(
+                vodId: dict["vod_id"] as? String ?? "\(dict["vod_id"] ?? "")",
+                vodName: dict["vod_name"] as? String ?? "",
+                vodPic: dict["vod_pic"] as? String,
+                vodRemarks: dict["vod_remarks"] as? String,
+                vodYear: dict["vod_year"] as? String,
+                vodArea: dict["vod_area"] as? String
+            )
+        }
+        return SpiderListResult(
+            list: vodList,
+            page: (result["page"] as? Int) ?? 1,
+            pageCount: (result["pagecount"] as? Int) ?? 1
+        )
     }
 }

@@ -25,6 +25,12 @@ final class CatPawConfigBuilder {
     /// 尝试从 CatPaw 服务端或源码硬编码生成 TVBoxConfig
     /// - Parameter baseURL: CatPaw 服务器基础 URL（含认证信息）
     func buildConfig(baseURL: String) async throws -> TVBoxConfig {
+        // 0. 如果是 .js.md5 模块 URL，尝试通过 Spider 引擎直接解析
+        if Self.isCatPawURL(baseURL),
+           let cfg = await trySpiderModule(baseURL: baseURL) {
+            return cfg
+        }
+
         // 1. 尝试从 CatPaw 服务端 /config 端点获取动态配置
         if let cfg = await tryServerConfig(baseURL: baseURL) {
             return cfg
@@ -38,6 +44,20 @@ final class CatPawConfigBuilder {
     static func isCatPawURL(_ url: String) -> Bool {
         let lower = url.lowercased()
         return lower.hasSuffix(".js.md5") || lower.hasSuffix("/index.js")
+    }
+
+    // MARK: - Spider 模块解析
+
+    /// 通过 JavaScriptCore 引擎解析 CatPaw Spider JS 模块
+    private func trySpiderModule(baseURL: String) async -> TVBoxConfig? {
+        let key = "spider_\(baseURL.hashValue)"
+        let name = extractName(from: baseURL)
+        return await SpiderEngine.shared.buildConfig(jsURL: baseURL, siteKey: key, siteName: name)
+    }
+
+    private func extractName(from url: String) -> String {
+        if let host = URL(string: url)?.host { return host }
+        return url.components(separatedBy: "/").last ?? "Spider"
     }
 
     // MARK: - 服务端配置获取
