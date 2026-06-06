@@ -110,66 +110,86 @@ final class CatPawConfigBuilder {
     // MARK: - JS Bundle 下载
 
     private func fetchBundleCode(jsURL: String) async -> String? {
-        let actualURL: String
-        if jsURL.lowercased().hasSuffix(".js.md5") {
-            guard let md5Data = try? await network.data(from: jsURL),
-                  let md5 = String(data: md5Data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  let baseURL = jsURL.components(separatedBy: ".md5").first else {
-                print("[CatPawConfigBuilder] fetchBundleCode: MD5 fetch failed")
-                return nil
-            }
-            actualURL = "\(baseURL)/\(md5)"
-            print("[CatPawConfigBuilder] fetchBundleCode: MD5=\(md5), actualURL=\(actualURL)")
-        } else {
-            actualURL = jsURL
-        }
-
-        // 尝试构造的 URL
-        if let data = try? await network.data(from: actualURL),
-           let code = String(data: data, encoding: .utf8),
-           !code.contains("<html>") {
-            print("[CatPawConfigBuilder] fetchBundleCode: 成功获取 JS (\(code.count) bytes)")
-            return code
-        }
-
-        // Fallback：手动跟踪 .js 的 302 重定向，提取 CDN URL 后直接请求
+        // 方式1：对 .js.md5 → 取 MD5 → 拼 URL {base}/{md5}
         if jsURL.lowercased().hasSuffix(".js.md5"),
-           let jsPath = jsURL.components(separatedBy: ".md5").first {
-            print("[CatPawConfigBuilder] fetchBundleCode: 手动跟踪重定向 \(jsPath)")
-            if let redirectURL = await followRedirect(url: jsPath),
-               let data = try? await network.data(from: redirectURL),
+           let baseURL = jsURL.components(separatedBy: ".md5").first,
+           let md5Data = try? await network.data(from: jsURL),
+           let md5 = String(data: md5Data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !md5.isEmpty {
+            let constructed = "\(baseURL)/\(md5)"
+            print("[CatPawConfigBuilder] 尝试 constructed URL: \(constructed)")
+            if let data = try? await network.data(from: constructed),
                let code = String(data: data, encoding: .utf8),
                !code.contains("<html>") {
-                print("[CatPawConfigBuilder] fetchBundleCode: 重定向成功 (\(code.count) bytes) → \(redirectURL.prefix(80))")
+                print("[CatPawConfigBuilder] constructed 成功 (\(code.count) bytes)")
                 return code
             }
+        }
+
+        // 方式2：GET index.js，手动提取 Location header 获取 CDN URL
+        let jsPath = jsURL.lowercased().hasSuffix(".md5")
+            ? (jsURL.components(separatedBy: ".md5").first ?? jsURL)
+            : jsURL
+        print("[CatPawConfigBuilder] 尝试 GET 重定向跟踪: \(jsPath)")
+        if let cdnURL = await self.extractRedirectLocation(from: jsPath),
+           let data = try? await network.data(from: cdnURL),
+           let code = String(data: data, encoding: .utf8),
+           !code.contains("<html>") {
+            print("[CatPawConfigBuilder] CDN 获取成功 (\(code.count) bytes)")
+            return code
         }
 
         print("[CatPawConfigBuilder] fetchBundleCode: 所有方式均失败")
         return nil
     }
 
-    /// 手动跟踪一次 302 重定向，返回最终 Location URL
-    private func followRedirect(url: String) async -> String? {
-        guard let nsURL = URL(string: url) else { return nil }
-        var request = URLRequest(url: nsURL)
-        request.httpMethod = "HEAD"
-        request.timeoutInterval = 10
-        // 不自动重定向
+    /// GET 请求，禁止自动重定向，提取 302 Location header
+    private func extractRedirectLocation(from urlString: String) async -> String? {
+        guard let url = URL(string: urlString) else { return nil }
+        let delegate = NoRedirectDelegate()
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 10
-        let session = URLSession(configuration: config)
-        guard let resp = try? await session.data(for: request).1 as? HTTPURLResponse else { return nil }
-        // 手动获取 Location header
-        if let loc = resp.value(forHTTPHeaderField: "Location") ?? resp.value(forHTTPHeaderField: "location") {
-            print("[CatPawConfigBuilder] followRedirect: \(resp.statusCode) → \(loc.prefix(100))")
-            return loc
+        config.httpAdditionalHeaders = ["User-Agent": "MyTVBox/1.0 (iOS)"]
+        let session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 10
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { return nil }
+            print("[CatPawConfigBuilder] extractRedirect: \(http.statusCode)")
+            if let loc = http.value(forHTTPHeaderField: "Location")
+                ?? http.value(forHTTPHeaderField: "location") {
+                print("[CatPawConfigBuilder] Location: \(loc.prefix(120))")
+                return loc
+            }
+            if let text = String(data: data, encoding: .utf8),
+               !text.contains("<html>"), text.count > 500 {
+                print("[CatPawConfigBuilder] 无重定向，内容像 JS (\(text.count) bytes)")
+                return urlString
+            }
+            print("[CatPawConfigBuilder] 无 Location，内容非 JS (\(data.count) bytes)")
+        } catch {
+            print("[CatPawConfigBuilder] extractRedirect error: \(error.localizedDescription)")
         }
-        print("[CatPawConfigBuilder] followRedirect: \(resp.statusCode), no Location header")
         return nil
     }
+}
 
-    // MARK: - Spider Meta 提取
+/// 禁止自动重定向的 URLSession delegate
+private class NoRedirectDelegate: NSObject, URLSessionTaskDelegate {
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        completionHandler(nil)
+    }
+}
+
+// MARK: - Spider Meta 提取
 
     private struct SpiderMeta {
         let key: String
