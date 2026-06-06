@@ -158,14 +158,42 @@ final class CatPawConfigBuilder {
     // MARK: - 已知 CMS API 地址映射
 
     /// CatPawOpen 各 spider 对应的 CMS 标准接口地址
-    /// 这些地址来自源码分析，是各 spider 实际请求的后端 API
+    /// 这些地址来自源码分析和 TVBox 社区，是各 spider 实际请求的后端 API
     private let knownCMSAPIs: [String: String] = [
-        // ffm3u8 — 非凡采集（标准 CMS，JSON API）
+        // === CatPawOpen 内置 spider ===
         "ffm3u8": "https://cj.ffzyapi.com/api.php/provide/vod/from/ffm3u8",
-        // kkys — 快看影视（自定义 API，AES 加密响应）
-        // kunyu77 — 琨娱七七（自定义 API，RSA 签名）
-        // 这两个使用自定义协议，无法直接用 CMS API 替代
-        // 保留 key 用于显示名称，type=3 标记需 JS 引擎
+        // kkys / kunyu77 使用自定义加密 API，无法直接用 CMS 替代
+
+        // === TVBox 社区常用 CMS 源（与 CatPaw 兼容）===
+        "bfzy":   "https://bfzyapi.com/api.php/provide/vod",
+        "ikun":   "https://ikunzyapi.com/api.php/provide/vod/from/ikm3u8",
+        "360zy":  "https://360zy.com/api.php/provide/vod",
+        "hw8":    "https://hw8.live/api.php/provide/vod",
+        "jinying":"https://jinyingzy.com/api.php/provide/vod",
+        "leshi":  "https://leshiapi.com/api.php/provide/vod",
+        "mdzy":   "https://www.mdzyapi.com/api.php/provide/vod",
+        "niuniu": "https://api.niuniuzy.me/api.php/provide/vod",
+        "okzy":   "https://okzyw9.com/api.php/provide/vod",
+        "hongniuzy": "https://www.hongniuzy2.com/api.php/provide/vod",
+        "lyd":    "https://api.lydapi.com/api.php/provide/vod",
+        "wolongzy": "https://collect.wolongzyw.com/api.php/provide/vod",
+        "heimuer": "https://json.heimuer.xyz/api.php/provide/vod",
+        "ffzy":   "https://cj.ffzyapi.com/api.php/provide/vod",
+        "tpzy":   "https://cj.tianpi.top/api.php/provide/vod",
+        "dbzy":   "https://www.dbzyapi.com/api.php/provide/vod",
+        "jszy":   "https://www.jszyapi.com/api.php/provide/vod",
+        "sdzy":   "https://sdzyapi.com/api.php/provide/vod",
+        "mozidian": "https://mozidian.com/api.php/provide/vod",
+        "hnzy":   "https://hnzyapi.com/api.php/provide/vod",
+        "tianying": "https://api.tiany.top/api.php/provide/vod",
+        "kbzy":   "https://www.kbzyapi.com/api.php/provide/vod",
+        "ckzy":   "https://www.ckzyw.com/api.php/provide/vod",
+        "feisu":  "https://www.feisuzyapi.com/api.php/provide/vod",
+        "baiwanzy": "https://www.baiwanzy.com/api.php/provide/vod",
+        "liangzi": "https://cj.lziapi.com/api.php/provide/vod",
+        "tianyi": "https://api.tiany.top/api.php/provide/vod",
+        "luobozy": "https://luobozyapi.com/api.php/provide/vod",
+        "maozhuatv": "https://www.mzryapi.com/api.php/provide/vod",
     ]
 
     /// 已知分类列表（来自 index.config.js）
