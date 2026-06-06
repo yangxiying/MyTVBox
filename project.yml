@@ -22,6 +22,7 @@ targets:
       - path: MyTVBox
         excludes:
           - "Info.plist"
+          - "MyTVBox-Bridging-Header.h"
     resources:
       - MyTVBox/Assets.xcassets
     settings:
@@ -34,6 +35,7 @@ targets:
         CODE_SIGN_IDENTITY: ""
         CODE_SIGNING_REQUIRED: "NO"
         DEVELOPMENT_TEAM: ""
+        SWIFT_OBJC_BRIDGING_HEADER: "MyTVBox/MyTVBox-Bridging-Header.h"
     info:
       path: MyTVBox/Info.plist
       properties:
