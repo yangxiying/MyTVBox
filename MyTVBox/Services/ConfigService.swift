@@ -17,6 +17,15 @@ final class ConfigService {
         let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw NetworkError.invalidURL }
 
+        // CatPaw .js.md5 URL → 直接交给 CatPawConfigBuilder（避免重复下载）
+        if CatPawConfigBuilder.isCatPawURL(trimmed) {
+            do {
+                return try await CatPawConfigBuilder.shared.buildConfig(baseURL: trimmed)
+            } catch {
+                // 构建失败则继续下面的标准流程
+            }
+        }
+
         // 第一步：尝试直接请求
         let primaryData: Data
         do {

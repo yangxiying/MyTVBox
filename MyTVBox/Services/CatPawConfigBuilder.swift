@@ -115,9 +115,11 @@ final class CatPawConfigBuilder {
             guard let md5Data = try? await network.data(from: jsURL),
                   let md5 = String(data: md5Data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
                   let baseURL = jsURL.components(separatedBy: ".md5").first else {
+                print("[CatPawConfigBuilder] fetchBundleCode: MD5 fetch failed for \(jsURL)")
                 return nil
             }
             actualURL = "\(baseURL)/\(md5)"
+            print("[CatPawConfigBuilder] fetchBundleCode: MD5=\(md5), actualURL=\(actualURL)")
         } else {
             actualURL = jsURL
         }
@@ -126,18 +128,23 @@ final class CatPawConfigBuilder {
         if let data = try? await network.data(from: actualURL),
            let code = String(data: data, encoding: .utf8),
            !code.contains("<html>") {
+            print("[CatPawConfigBuilder] fetchBundleCode: 成功获取 JS (\(code.count) bytes)")
             return code
         }
 
         // Fallback：对 .js.md5 URL，尝试跟随 .js 的 302 重定向获取实际内容
         if jsURL.lowercased().hasSuffix(".js.md5"),
-           let jsPath = jsURL.components(separatedBy: ".md5").first,
-           let data = try? await network.data(from: jsPath),
-           let code = String(data: data, encoding: .utf8),
-           !code.contains("<html>") {
-            return code
+           let jsPath = jsURL.components(separatedBy: ".md5").first {
+            print("[CatPawConfigBuilder] fetchBundleCode: 尝试 redirect fallback \(jsPath)")
+            if let data = try? await network.data(from: jsPath),
+               let code = String(data: data, encoding: .utf8),
+               !code.contains("<html>") {
+                print("[CatPawConfigBuilder] fetchBundleCode: redirect 成功 (\(code.count) bytes)")
+                return code
+            }
         }
 
+        print("[CatPawConfigBuilder] fetchBundleCode: 所有方式均失败")
         return nil
     }
 
