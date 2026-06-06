@@ -38,19 +38,22 @@ struct VideoCardView: View {
     // MARK: - 海报
 
     private var poster: some View {
-        posterImage
-            .aspectRatio(2.0 / 3.0, contentMode: .fill)
-            .clipped()
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(TVBoxTheme.stroke, lineWidth: 1)
-            )
-            .overlay(scanlineOverlay)
-            .overlay(cornerBracketTL, alignment: .topLeading)
-            .overlay(cornerBracketBR, alignment: .bottomTrailing)
-            .overlay(remarkBadge, alignment: .topTrailing)
-            .overlay(indexBadge, alignment: .bottomLeading)
+        GeometryReader { geo in
+            posterImage
+                .frame(width: geo.size.width, height: geo.size.width * 1.5)
+                .clipped()
+        }
+        .aspectRatio(2.0 / 3.0, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(TVBoxTheme.stroke, lineWidth: 1)
+        )
+        .overlay(scanlineOverlay)
+        .overlay(cornerBracketTL, alignment: .topLeading)
+        .overlay(cornerBracketBR, alignment: .bottomTrailing)
+        .overlay(remarkBadge, alignment: .topTrailing)
+        .overlay(indexBadge, alignment: .bottomLeading)
     }
 
     @ViewBuilder
