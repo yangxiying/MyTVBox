@@ -14,43 +14,37 @@ struct ContentGridView: View {
     private let rowSpacing: CGFloat = 18
 
     var body: some View {
-        VStack(spacing: 16) {
-            GeometryReader { geo in
-                let totalHSpacing = columnSpacing * CGFloat(columns - 1)
-                let cardWidth = (geo.size.width - totalHSpacing) / CGFloat(columns)
-                let rows = stride(from: 0, to: items.count, by: columns).map {
-                    Array(items[$0..<min($0 + columns, items.count)])
-                }
-                VStack(spacing: rowSpacing) {
-                    ForEach(Array(rows.enumerated()), id: \.offset) { rowIdx, rowItems in
-                        HStack(alignment: .top, spacing: columnSpacing) {
-                            ForEach(Array(rowItems.enumerated()), id: \.element.id) { colIdx, item in
-                                let globalIdx = rowIdx * columns + colIdx
-                                Button {
-                                    onItemTap(item)
-                                } label: {
-                                    VideoCardView(item: item, index: globalIdx + 1)
-                                }
-                                .buttonStyle(CardPressStyle())
-                                .frame(width: cardWidth)
-                                .onAppear {
-                                    let triggerIndex = max(0, items.count - 4)
-                                    if globalIdx >= triggerIndex {
-                                        onLoadMore()
-                                    }
-                                }
-                            }
-                            // 奇数个 item 时右侧补空位保持列宽一致
-                            if rowItems.count < columns {
-                                ForEach(0..<(columns - rowItems.count), id: \.self) { _ in
-                                    Color.clear.frame(width: cardWidth)
-                                }
-                            }
+        // GeometryReader 只用于测量父级宽度，不占高度
+        VStack(spacing: 0) {
+            GeometryReader { proxy in
+                Color.clear
+                    .preference(key: GridWidthKey.self, value: proxy.size.width)
+            }
+            .frame(height: 0)
+
+            if let width = gridWidth {
+                let totalSpacing = columnSpacing * CGFloat(columns - 1)
+                let cardWidth = (width - totalSpacing - 32) / CGFloat(columns)  // 32 = horizontal padding
+
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: columnSpacing), count: columns),
+                    spacing: rowSpacing
+                ) {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { idx, item in
+                        Button {
+                            onItemTap(item)
+                        } label: {
+                            VideoCardView(item: item, index: idx + 1)
+                        }
+                        .buttonStyle(CardPressStyle())
+                        .onAppear {
+                            let triggerIndex = max(0, items.count - 4)
+                            if idx >= triggerIndex { onLoadMore() }
                         }
                     }
                 }
+                .padding(.horizontal, 16)
             }
-            .padding(.horizontal, 16)
 
             if isLoadingMore {
                 HStack(spacing: 10) {
@@ -68,6 +62,17 @@ struct ContentGridView: View {
                 .transition(.opacity)
             }
         }
+        .onPreferenceChange(GridWidthKey.self) { gridWidth = $0 }
+    }
+
+    @State private var gridWidth: CGFloat?
+}
+
+private struct GridWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        let v = nextValue()
+        if v > 0 { value = v }
     }
 }
 
