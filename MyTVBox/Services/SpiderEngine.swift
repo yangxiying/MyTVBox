@@ -172,11 +172,23 @@ final class SpiderEngine {
             actualURL = jsURL
         }
 
-        guard let data = try? await network.data(from: actualURL),
-              let code = String(data: data, encoding: .utf8) else {
-            return nil
+        // 尝试构造的 URL
+        if let data = try? await network.data(from: actualURL),
+           let code = String(data: data, encoding: .utf8),
+           !code.contains("<html>") {
+            return code
         }
-        return code
+
+        // Fallback：对 .js.md5 URL，尝试跟随 .js 的 302 重定向
+        if jsURL.lowercased().hasSuffix(".js.md5"),
+           let jsPath = jsURL.components(separatedBy: ".md5").first,
+           let data = try? await network.data(from: jsPath),
+           let code = String(data: data, encoding: .utf8),
+           !code.contains("<html>") {
+            return code
+        }
+
+        return nil
     }
 
     /// 创建带原生桥接的 JSContext

@@ -121,11 +121,23 @@ final class CatPawConfigBuilder {
             actualURL = jsURL
         }
 
-        guard let data = try? await network.data(from: actualURL),
-              let code = String(data: data, encoding: .utf8) else {
-            return nil
+        // 尝试构造的 URL
+        if let data = try? await network.data(from: actualURL),
+           let code = String(data: data, encoding: .utf8),
+           !code.contains("<html>") {
+            return code
         }
-        return code
+
+        // Fallback：对 .js.md5 URL，尝试跟随 .js 的 302 重定向获取实际内容
+        if jsURL.lowercased().hasSuffix(".js.md5"),
+           let jsPath = jsURL.components(separatedBy: ".md5").first,
+           let data = try? await network.data(from: jsPath),
+           let code = String(data: data, encoding: .utf8),
+           !code.contains("<html>") {
+            return code
+        }
+
+        return nil
     }
 
     // MARK: - Spider Meta 提取
@@ -136,10 +148,16 @@ final class CatPawConfigBuilder {
         let type: Int
     }
 
-    /// 从打包 JS 源码中用正则提取所有 `meta: { key: '...', name: '...', type: N }`
+    /// 主入口：JS 求值提取 → 正则兜底
     private func extractSpiderMetas(from jsCode: String) -> [SpiderMeta] {
-        // 匹配 meta: { key: 'ffm3u8', name: '非凡采集', type: 3 }
-        // 注意 key/name 顺序不固定，type 可能缺省（默认 3）
+        if let jsResults = extractSpiderMetasViaJS(jsCode), !jsResults.isEmpty {
+            return jsResults
+        }
+        return extractSpiderMetasRegex(from: jsCode)
+    }
+
+    /// 用正则提取 meta（未混淆格式）
+    private func extractSpiderMetasRegex(from jsCode: String) -> [SpiderMeta] {
         let pattern = #"meta\s*:\s*\{[^}]*key\s*:\s*['"]([^'"]+)['"][^}]*name\s*:\s*['"]([^'"]+)['"][^}]*(?:type\s*:\s*(\d+))?[^}]*\}"#
 
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return [] }
@@ -331,6 +349,54 @@ final class CatPawConfigBuilder {
             filterable: 0,
             categories: knownCategories[key]
         )
+    }
+
+    /// 用 JavaScriptContext 执行 bundle，提取混淆后的 spider meta
+    private func extractSpiderMetasViaJS(_ jsCode: String) -> [SpiderMeta]? {
+        import JavaScriptCore
+        let ctx = JSContext()!
+        // 最小 shim
+        ctx.evaluateScript("var console={log:function(){},warn:function(){},error:function(){},info:function(){}}")
+        ctx.evaluateScript(jsCode)
+
+        // 从源码中找 meta:{ ... } 片段，在已加载的上下文中执行求值
+        let pattern = #"meta\s*:\s*\{"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []),
+              let fullRange = NSRange(jsCode.startIndex..., in: jsCode) else { return nil }
+
+        let matches = regex.matches(in: jsCode, options: [], range: fullRange)
+        guard !matches.isEmpty else { return nil }
+
+        var seen = Set<String>()
+        var results: [SpiderMeta] = []
+
+        for match in matches {
+            guard let braceStart = Range(match.range(at: 0), in: jsCode) else { continue }
+            // 从 { 开始数括号找到完整对象
+            let searchStart = jsCode.index(jsCode.startIndex, offsetBy: match.range.upperBound - match.range.lowerBound)
+            let sliceFromBrace = jsCode[searchStart...]
+            var depth = 0, endIdx = sliceFromBrace.startIndex
+            for ch in sliceFromBrace {
+                if ch == "{" { depth += 1 }
+                else if ch == "}" { depth -= 1; if depth == 0 { break } }
+                endIdx = jsCode.index(after: endIdx)
+            }
+            guard depth == 0 else { continue }
+            let snippet = String(jsCode[searchStart...endIdx])
+
+            // 在已加载上下文中执行，求值得到实际值
+            if let obj = ctx.evaluateScript("(\(snippet))"),
+               let dict = obj.toObject() as? [String: Any],
+               let key = dict["key"] as? String,
+               let name = dict["name"] as? String {
+                let type = dict["type"] as? Int ?? 3
+                guard !seen.contains(key) else { continue }
+                seen.insert(key)
+                results.append(SpiderMeta(key: key, name: name, type: type))
+            }
+        }
+
+        return results.isEmpty ? nil : results
     }
 
     // MARK: - 内置已知 CMS 源（fallback）

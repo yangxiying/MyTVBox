@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 可复用的内容网格 —— 自适应 2 列；底部支持加载更多指示器
+/// 可复用的内容网格 —— 固定 2 列；底部支持加载更多指示器
 /// - 倒数第 4 个 item 出现时触发 onLoadMore（避免到底再触发的延迟感）
 struct ContentGridView: View {
 
@@ -9,26 +9,36 @@ struct ContentGridView: View {
     let onLoadMore: () -> Void
     let onItemTap: (VideoItem) -> Void
 
-    private let columns: [GridItem] = [
-        GridItem(.flexible(), spacing: 14),
-        GridItem(.flexible(), spacing: 14)
-    ]
+    private let columns = 2
+    private let columnSpacing: CGFloat = 14
+    private let rowSpacing: CGFloat = 18
 
     var body: some View {
         VStack(spacing: 16) {
-            LazyVGrid(columns: columns, spacing: 18) {
-                ForEach(Array(items.enumerated()), id: \.element.id) { idx, item in
-                    Button {
-                        onItemTap(item)
-                    } label: {
-                        VideoCardView(item: item, index: idx + 1)
-                    }
-                    .buttonStyle(CardPressStyle())
-                    .onAppear {
-                        // 触发位置：倒数第 4 个或最后一个
-                        let triggerIndex = max(0, items.count - 4)
-                        if idx >= triggerIndex {
-                            onLoadMore()
+            let rows = stride(from: 0, to: items.count, by: columns).map {
+                Array(items[$0..<min($0 + columns, items.count)])
+            }
+            VStack(spacing: rowSpacing) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { rowIdx, rowItems in
+                    HStack(alignment: .top, spacing: columnSpacing) {
+                        ForEach(Array(rowItems.enumerated()), id: \.element.id) { colIdx, item in
+                            let globalIdx = rowIdx * columns + colIdx
+                            Button {
+                                onItemTap(item)
+                            } label: {
+                                VideoCardView(item: item, index: globalIdx + 1)
+                            }
+                            .buttonStyle(CardPressStyle())
+                            .onAppear {
+                                let triggerIndex = max(0, items.count - 4)
+                                if globalIdx >= triggerIndex {
+                                    onLoadMore()
+                                }
+                            }
+                            if colIdx < columns - 1 { Spacer(minLength: 0) }
+                        }
+                        if rowItems.count < columns {
+                            ForEach(0..<(columns - rowItems.count), id: \.self) { _ in Spacer(minLength: 0) }
                         }
                     }
                 }

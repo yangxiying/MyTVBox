@@ -40,7 +40,7 @@ struct VideoCardView: View {
     private var poster: some View {
         posterImage
             .aspectRatio(2.0 / 3.0, contentMode: .fill)
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, minHeight: 180)
             .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(
