@@ -102,29 +102,42 @@ enum SpiderBridge {
               let keyData = key.data(using: .utf8),
               let ivData = iv.data(using: .utf8) else { return "" }
 
-        // 裁剪到合法密钥长度（16/24/32 字节）
-        let validKeyLengths = [16, 24, 32]
+        // 裁剪到合法 AES 密钥长度（16/24/32 字节）
+        let validLengths = [16, 24, 32]
         var effectiveKeyData = keyData
-        if !validKeyLengths.contains(keyData.count) {
-            effectiveKeyData = keyData.prefix(validKeyLengths.first { $0 >= keyData.count } ?? 32)
+        if !validLengths.contains(keyData.count) {
+            if let target = validLengths.first(where: { $0 >= keyData.count }) {
+                effectiveKeyData = keyData.prefix(target)
+            } else {
+                effectiveKeyData = keyData.prefix(32)
+            }
         }
 
-        guard let aesKey = SymmetricKey(data: effectiveKeyData) else { return "" }
+        // 使用 CommonCrypto 做 AES-CBC 解密
+        let bufferSize = cipherData.count + kCCBlockSizeAES128
+        var buffer = Data(count: bufferSize)
+        var bytesDecrypted = 0
 
-        // PKCS7 去填充手动处理
-        let iv = try? AES.CBC Iv(ivData)
-        guard let iv = iv else { return "" }
-
-        guard let decryptedData = try? AES.CBC.decrypt(cipherData, using: aesKey, iv: iv) else { return "" }
-
-        // 去除 PKCS7 填充
-        guard let lastByte = decryptedData.last, lastByte > 0, lastByte <= 16 else {
-            return String(data: decryptedData, encoding: .utf8) ?? ""
+        let status = buffer.withUnsafeMutableBytes { bufferBytes in
+            cipherData.withUnsafeBytes { cipherBytes in
+                ivData.withUnsafeBytes { ivBytes in
+                    effectiveKeyData.withUnsafeBytes { keyBytes in
+                        CCCrypt(
+                            CCOperation(kCCDecrypt),
+                            CCAlgorithm(kCCAlgorithmAES),
+                            CCOptions(kCCOptionPKCS7Padding),
+                            keyBytes.baseAddress, effectiveKeyData.count,
+                            ivBytes.baseAddress,
+                            cipherBytes.baseAddress, cipherData.count,
+                            bufferBytes.baseAddress, bufferSize,
+                            &bytesDecrypted
+                        )
+                    }
+                }
+            }
         }
-        let padLen = Int(lastByte)
-        if decryptedData.suffix(padLen).allSatisfy({ $0 == lastByte }) {
-            return String(data: decryptedData.dropLast(padLen), encoding: .utf8) ?? ""
-        }
-        return String(data: decryptedData, encoding: .utf8) ?? ""
+
+        guard status == kCCSuccess else { return "" }
+        return String(data: buffer.prefix(bytesDecrypted), encoding: .utf8) ?? ""
     }
 }

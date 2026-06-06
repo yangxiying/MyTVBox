@@ -48,7 +48,8 @@ final class SpiderEngine {
             from: homeResult,
             context: context,
             siteKey: siteKey,
-            siteName: siteName
+            siteName: siteName,
+            jsCode: jsCode
         )
     }
 
@@ -274,7 +275,14 @@ final class SpiderEngine {
         var jsArgs: [Any] = []
         for arg in args {
             if let dict = arg as? [String: Any] {
-                jsArgs.append(dict.jsValue(in: context))
+                // 通过 JSON 序列化将 Dictionary 转为 JS 对象
+                if let jsonData = try? JSONSerialization.data(withJSONObject: dict),
+                   let jsonString = String(data: jsonData, encoding: .utf8) {
+                    let jsObj = context.evaluateScript("(\(jsonString))")
+                    jsArgs.append(jsObj as Any)
+                } else {
+                    jsArgs.append(jsObject(from: [:], context: context))
+                }
             } else {
                 jsArgs.append(arg)
             }
@@ -282,10 +290,17 @@ final class SpiderEngine {
 
         let result = fn.call(withArguments: jsArgs)
         guard let result = result, !result.isUndefined else { return nil }
-
-        // JSValue → Dictionary
         guard let dict = result.toObject() as? [String: Any] else { return nil }
         return dict
+    }
+
+    /// 将 Swift 字典转为 JSValue（用于参数传递）
+    private func jsObject(from dict: [String: Any], context: JSContext) -> JSValue {
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: dict),
+              let jsonString = String(data: jsonData, encoding: .utf8) else {
+            return JSValue(object: NSDictionary(), in: context)
+        }
+        return context.evaluateScript("(\(jsonString))")
     }
 
     // MARK: - 配置构建
@@ -295,7 +310,8 @@ final class SpiderEngine {
         from homeResult: [String: Any],
         context: JSContext,
         siteKey: String,
-        siteName: String
+        siteName: String,
+        jsCode: String
     ) -> TVBoxConfig? {
         // 解析分类列表
         guard let classList = homeResult["class"] as? [[String: Any]], !classList.isEmpty else {
