@@ -1,6 +1,19 @@
 import Foundation
 import WebKit
 
+private func flog(_ s: String) {
+    NSLog("[SpiderEngine] \(s)")
+    guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
+    let url = docs.appendingPathComponent("spider_debug.log")
+    let line = "\(Date()): \(s)\n"
+    guard let data = line.data(using: .utf8) else { return }
+    if let fh = try? FileHandle(forWritingTo: url) {
+        fh.seekToEndOfFile(); fh.write(data); try? fh.close()
+    } else {
+        try? data.write(to: url)
+    }
+}
+
 /// CatPaw Spider JS 执行引擎（WKWebView 版本，iOS 17+）
 ///
 /// 使用 WKWebView 执行 CatPaw webpack bundle。
@@ -26,14 +39,20 @@ final class WebViewSpiderEngine {
 
     func execute(jsCode: String, method: String, args: [String: Any], spiderKey: String?) async -> [String: Any]? {
         let key = spiderKey ?? "__default__"
+        flog("execute: method=\(method) key=\(key) jsLen=\(jsCode.count)")
         let webView: WKWebView
         if let existing = withLock({ webViews[key] }) {
             webView = existing
+            flog("reusing webView for \(key)")
         } else {
+            flog("creating webView for \(key)")
             webView = await createWebView(jsCode: jsCode, spiderKey: spiderKey)
             withLock { webViews[key] = webView }
         }
-        return await callMethod(webView: webView, method: method, args: args, spiderKey: spiderKey)
+        let result = await callMethod(webView: webView, method: method, args: args, spiderKey: spiderKey)
+        flog("result=\(result != nil ? "non-nil" : "nil")")
+        if let r = result { flog("result keys=\(Array(r.keys))") }
+        return result
     }
 
     func remove(spiderKey: String) { withLock { webViews.removeValue(forKey: spiderKey) } }
@@ -45,11 +64,15 @@ final class WebViewSpiderEngine {
         await withCheckedContinuation { continuation in
             DispatchQueue.main.async {
                 let key = spiderKey ?? "default"
+                flog("createWebView: key=\(key) jsLen=\(jsCode.count)")
 
                 // 提取 webpack 代码（跳过 IIFE HTML 生成器）
                 var modifiedJS = jsCode
                 if let range = modifiedJS.range(of: "var k$e=Object.create") {
                     modifiedJS = "var exports={};var module={exports:exports};" + String(modifiedJS[range.lowerBound...])
+                    flog("webpack-only extracted, newLen=\(modifiedJS.count)")
+                } else {
+                    flog("WARNING: 'var k$e=Object.create' not found in bundle!")
                 }
 
                 // 用 SpiderSchemeHandler 提供 JS 文件
@@ -116,6 +139,7 @@ final class WebViewSpiderEngine {
     }
 
     private func runInit(webView: WKWebView) {
+        // Run init, then read diagnostics back to native flog
         webView.evaluateJavaScript("""
         (async function(){
             try{
@@ -124,20 +148,29 @@ final class WebViewSpiderEngine {
                     + ' exports_keys=' + JSON.stringify(Object.keys(module.exports||{}))
                     + ' Fpr=' + (typeof Fpr) + ' Lpr=' + (typeof Lpr)
                     + ' fn=' + (typeof window.fn) + ' err=' + (window.__err__||'none');
-                console.log('[init-diag] ' + diag);
+                window.__init_diag__ = diag;
                 var e = module.exports;
                 if(e && typeof e.start === 'function'){
-                    console.log('[init] calling start()...');
                     await e.start();
-                    console.log('[init] done fn=' + (typeof window.fn));
+                    window.__init_result__ = 'ok fn=' + (typeof window.fn);
                 } else {
-                    console.log('[init] no start, exports=' + JSON.stringify(Object.keys(e||{})));
+                    window.__init_result__ = 'no_start exports=' + JSON.stringify(Object.keys(e||{}));
                 }
             }catch(err){
-                console.log('[init] err=' + err.message + ' stack=' + (err.stack||'').substring(0,200));
+                window.__init_result__ = 'err: ' + err.message + ' stack=' + (err.stack||'').substring(0,200);
             }
         })();
-        """, completionHandler: nil)
+        """) { _, _ in
+            // After init runs, read diagnostics back to file log
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                webView.evaluateJavaScript("window.__init_diag__ || 'no_diag'") { diag, _ in
+                    flog("JS DIAG: \(diag ?? "nil")")
+                }
+                webView.evaluateJavaScript("window.__init_result__ || 'no_result'") { res, _ in
+                    flog("JS INIT: \(res ?? "nil")")
+                }
+            }
+        }
     }
 
     // MARK: - 方法调用
@@ -160,7 +193,7 @@ final class WebViewSpiderEngine {
         await withCheckedContinuation { cont in
             DispatchQueue.main.async {
                 webView.evaluateJavaScript(script) { result, error in
-                    if let error = error { NSLog("[WSE] err: \(error.localizedDescription)"); cont.resume(returning: nil); return }
+                    if let error = error { flog("execJS err: \(error.localizedDescription)"); cont.resume(returning: nil); return }
                     if let dict = result as? [String: Any] { cont.resume(returning: dict); return }
                     if let str = result as? String, let data = str.data(using: .utf8),
                        let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] { cont.resume(returning: json); return }
