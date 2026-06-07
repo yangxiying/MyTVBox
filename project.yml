@@ -41,7 +41,7 @@ targets:
         FRAMEWORK_SEARCH_PATHS: ["$(PROJECT_DIR)/Frameworks"]
     dependencies:
       - framework: Frameworks/NodeMobile.framework
-        embed: false
+        embed: true
     info:
       path: MyTVBox/Info.plist
       properties:
