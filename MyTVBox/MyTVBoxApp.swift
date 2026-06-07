@@ -22,6 +22,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        // 写文件日志，验证 UIFileSharing 可用
+        if let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            let logURL = docs.appendingPathComponent("spider_debug.log")
+            let msg = "\(Date()): [MyTVBox] App launched iOS \(UIDevice.current.systemVersion)\n"
+            try? msg.data(using: .utf8)?.write(to: logURL)
+        }
         NSLog("[MyTVBox] App launched, iOS \(UIDevice.current.systemVersion)")
         // 注册后台/前台切换通知
         NotificationCenter.default.addObserver(
