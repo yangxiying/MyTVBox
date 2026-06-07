@@ -1,5 +1,6 @@
 import Foundation
 import JavaScriptCore
+import WebKit
 
 /// CatPaw Spider JS 模块执行引擎
 ///
@@ -61,75 +62,10 @@ final class SpiderEngine {
     ///   - args: 方法参数字典
     ///   - spiderKey: bundle 中的 spider key（多 spider bundle 时必传，用于路由）
     func execute(jsCode: String, method: String, args: [String: Any], spiderKey: String? = nil) async -> [String: Any]? {
-        let context = createContext()
-
-        // 注入 bundle 代码
-        context.evaluateScript(jsCode)
-        if let exception = context.exception, !exception.isUndefined {
-            print("[SpiderEngine] JS 注入异常: \(exception.toString() ?? "unknown")")
-            return nil
-        }
-
-        // 包装方法调用：优先 __JS_SPIDER__，回退到顶层函数
-        let routerScript: String
-        if let key = spiderKey {
-            routerScript = """
-            (function() {
-                var __spider_key__ = \(jsonString(key));
-                var __spider__ = (typeof globalThis.__JS_SPIDER__ !== 'undefined') ? globalThis.__JS_SPIDER__ : null;
-                function __call__(method, args) {
-                    if (__spider__ && typeof __spider__[method] === 'function') {
-                        return __spider__[method].apply(null, args);
-                    }
-                    if (typeof globalThis[method] === 'function') {
-                        return globalThis[method].apply(null, args);
-                    }
-                    return null;
-                }
-                return { call: __call__, key: __spider_key__ };
-            })()
-            """
-        } else {
-            // 无 spiderKey：单模块模式，直接调用顶层函数
-            routerScript = """
-            (function() {
-                function __call__(method, args) {
-                    if (typeof globalThis[method] === 'function') {
-                        return globalThis[method].apply(null, args);
-                    }
-                    return null;
-                }
-                return { call: __call__ };
-            })()
-            """
-        }
-
-        guard let router = context.evaluateScript(routerScript),
-              !router.isUndefined else {
-            print("[SpiderEngine] 路由器创建失败")
-            return nil
-        }
-
-        // 如果有 init 方法，调用之
-        _ = context.evaluateScript("typeof globalThis.init === 'function' && globalThis.init()")
-
-        // 调用目标方法
-        let callFn = router.objectForKeyedSubscript("call")
-        guard let callFn = callFn, !callFn.isUndefined else { return nil }
-
-        let jsArgs = buildJSArgs(args: args, context: context)
-        let result = callFn.call(withArguments: [method as NSString] + jsArgs)
-
-        guard let result = result, !result.isUndefined else { return nil }
-        if let dict = result.toObject() as? [String: Any] {
-            return dict
-        }
-        // 如果返回字符串，尝试 JSON 解析
-        if let str = result.toString(), let data = str.data(using: .utf8),
-           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            return json
-        }
-        return nil
+        // 优先使用 Node.js Mobile（完整 ES2018+ 支持）
+        return await NodeSpiderEngine.shared.execute(
+            jsCode: jsCode, method: method, args: args, spiderKey: spiderKey
+        )
     }
 
     // MARK: - 内部工具
@@ -156,7 +92,7 @@ final class SpiderEngine {
     }
 
     /// 下载模块源码（支持 .js.md5 → 取 MD5 → 下载对应 JS 文件）
-    private func fetchModuleCode(jsURL: String) async -> String? {
+    func fetchModuleCode(jsURL: String) async -> String? {
         let network = NetworkManager.shared
 
         // 如果是 .js.md5，先取 MD5 再下载对应文件
@@ -470,6 +406,10 @@ final class SpiderContextManager {
 
     func moduleCode(for key: String) -> String? {
         moduleCodes[key]
+    }
+
+    func allModuleCodes() -> [(String, String)] {
+        Array(moduleCodes.map { ($0.key, $0.value) })
     }
 
     func remove(key: String) {

@@ -120,7 +120,7 @@ final class CatPawConfigBuilder {
             print("[CatPawConfigBuilder] 尝试 constructed URL: \(constructed)")
             if let data = try? await network.data(from: constructed),
                let code = String(data: data, encoding: .utf8),
-               !code.contains("<html>") {
+               code.count > 1000 {
                 print("[CatPawConfigBuilder] constructed 成功 (\(code.count) bytes)")
                 return code
             }
@@ -131,12 +131,21 @@ final class CatPawConfigBuilder {
             ? (jsURL.components(separatedBy: ".md5").first ?? jsURL)
             : jsURL
         print("[CatPawConfigBuilder] 尝试 GET 重定向跟踪: \(jsPath)")
-        if let cdnURL = await self.extractRedirectLocation(from: jsPath),
-           let data = try? await network.data(from: cdnURL),
-           let code = String(data: data, encoding: .utf8),
-           !code.contains("<html>") {
-            print("[CatPawConfigBuilder] CDN 获取成功 (\(code.count) bytes)")
-            return code
+        if let cdnURL = await self.extractRedirectLocation(from: jsPath) {
+            print("[CatPawConfigBuilder] CDN URL: \(cdnURL.prefix(120))")
+            do {
+                let data = try await network.data(from: cdnURL)
+                if let code = String(data: data, encoding: .utf8), code.count > 1000 {
+                    print("[CatPawConfigBuilder] CDN 获取成功 (\(code.count) bytes)")
+                    return code
+                } else {
+                    print("[CatPawConfigBuilder] CDN 内容无法 UTF-8 解码 (\(data.count) bytes)，前64字节: \(data.prefix(64).map { String(format: "%02x", $0) }.joined(separator: " "))")
+                }
+            } catch {
+                print("[CatPawConfigBuilder] CDN 下载失败: \(error.localizedDescription)")
+            }
+        } else {
+            print("[CatPawConfigBuilder] 未提取到 CDN URL")
         }
 
         print("[CatPawConfigBuilder] fetchBundleCode: 所有方式均失败")
@@ -174,7 +183,6 @@ final class CatPawConfigBuilder {
         }
         return nil
     }
-}
 
 /// 禁止自动重定向的 URLSession delegate
 private class NoRedirectDelegate: NSObject, URLSessionTaskDelegate {
@@ -232,7 +240,7 @@ private class NoRedirectDelegate: NSObject, URLSessionTaskDelegate {
 
             guard !seen.contains(key) else { continue }
             seen.insert(key)
-            results.append(SpiderMeta(key: key, name: name, type: type))
+            results.append(SpiderMeta(key: key, name: decodeJSEscapes(name), type: type))
         }
 
         return results
@@ -487,5 +495,45 @@ private class NoRedirectDelegate: NSObject, URLSessionTaskDelegate {
         }
 
         return TVBoxConfig(sites: sites)
+    }
+
+    /// 解码 JavaScript Unicode 转义：\uXXXX 和 \u{XXXXX} → 实际字符
+    private func decodeJSEscapes(_ s: String) -> String {
+        var result = ""
+        var i = s.startIndex
+        while i < s.endIndex {
+            if s[i] == "\\" {
+                let next = s.index(after: i)
+                if next < s.endIndex, s[next] == "u" {
+                    let digitStart = s.index(after: next)
+                    if digitStart < s.endIndex, s[digitStart] == "{" {
+                        // \u{XXXXX} 格式
+                        let hexStart = s.index(after: digitStart)
+                        if let hexEnd = s[hexStart...].firstIndex(of: "}") {
+                            let hexStr = String(s[hexStart..<hexEnd])
+                            if let val = UInt32(hexStr, radix: 16),
+                               let scalar = Unicode.Scalar(val) {
+                                result.append(Character(scalar))
+                                i = s.index(after: hexEnd)
+                                continue
+                            }
+                        }
+                    } else {
+                        // \uXXXX 格式
+                        let hexEnd = s.index(digitStart, offsetBy: 4, limitedBy: s.endIndex) ?? s.endIndex
+                        let hexStr = String(s[digitStart..<hexEnd])
+                        if let val = UInt16(hexStr, radix: 16),
+                           let scalar = Unicode.Scalar(val) {
+                            result.append(Character(scalar))
+                            i = hexEnd
+                            continue
+                        }
+                    }
+                }
+            }
+            result.append(s[i])
+            i = s.index(after: i)
+        }
+        return result
     }
 }

@@ -36,6 +36,12 @@ targets:
         CODE_SIGNING_REQUIRED: "NO"
         DEVELOPMENT_TEAM: ""
         SWIFT_OBJC_BRIDGING_HEADER: "MyTVBox/MyTVBox-Bridging-Header.h"
+        OTHER_LDFLAGS: ["-framework", "NodeMobile"]
+        LIBRARY_SEARCH_PATHS: ["$(PROJECT_DIR)/Frameworks"]
+        FRAMEWORK_SEARCH_PATHS: ["$(PROJECT_DIR)/Frameworks"]
+    dependencies:
+      - framework: Frameworks/NodeMobile.framework
+        embed: false
     info:
       path: MyTVBox/Info.plist
       properties:
