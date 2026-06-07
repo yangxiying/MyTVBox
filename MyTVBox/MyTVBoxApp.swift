@@ -22,6 +22,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        NSLog("[MyTVBox] App launched, iOS \(UIDevice.current.systemVersion)")
         // 注册后台/前台切换通知
         NotificationCenter.default.addObserver(
             self, selector: #selector(didEnterBackground),
