@@ -26,8 +26,11 @@ final class ContentViewModel: ObservableObject {
     func loadCategories(site: Site) async {
         errorMessage = nil
         do {
+            print("[ContentViewModel] loadCategories: key=\(site.key) type=\(site.type) spiderKey=\(site.spiderKey ?? "nil")")
             if site.type == 3, let code = SpiderContextManager.shared.moduleCode(for: site.key) {
+                print("[ContentViewModel] Spider execute: method=home, codeLen=\(code.count)")
                 let result = await SpiderEngine.shared.execute(jsCode: code, method: "home", args: [:], spiderKey: site.spiderKey)
+                print("[ContentViewModel] Spider result: \(result != nil ? "\(result!.count) keys" : "nil")")
                 if let classList = result?["class"] as? [[String: Any]] {
                     self.categories = classList.compactMap { dict in
                         guard let typeId = dict["type_id"] as? String ?? (dict["type_id"] as? Int).map(String.init),
@@ -36,6 +39,7 @@ final class ContentViewModel: ObservableObject {
                     }
                 }
             } else {
+                print("[ContentViewModel] CMS API path: site.key=\(site.key) type=\(site.type) moduleCode=\(SpiderContextManager.shared.moduleCode(for: site.key) != nil ? "exists" : "nil")")
                 let cats = try await apiService.fetchCategories(site: site)
                 self.categories = cats
             }
@@ -57,12 +61,30 @@ final class ContentViewModel: ObservableObject {
         defer { isLoading = false }
 
         let typeId = category?.typeId ?? ""
+        print("[ContentViewModel] loadVideoList: key=\(site.key) type=\(site.type) typeId=\(typeId.isEmpty ? "(empty)" : typeId) spiderKey=\(site.spiderKey ?? "nil")")
         do {
             if site.type == 3, let code = SpiderContextManager.shared.moduleCode(for: site.key) {
-                let args: [String: Any] = ["id": typeId, "pg": 1]
-                let result = await SpiderEngine.shared.execute(jsCode: code, method: "category", args: args, spiderKey: site.spiderKey)
+                print("[ContentViewModel] Spider path: codeLen=\(code.count)")
+                let result: [String: Any]?
+                if typeId.isEmpty {
+                    // 无分类时调 home() 获取默认视频列表
+                    print("[ContentViewModel] Calling home()...")
+                    result = await SpiderEngine.shared.execute(jsCode: code, method: "home", args: [:], spiderKey: site.spiderKey)
+                    print("[ContentViewModel] home() result: \(result != nil ? "\(result!.count) keys: \(Array(result!.keys))" : "nil")")
+                    // 同时解析分类
+                    if let classList = result?["class"] as? [[String: Any]] {
+                        self.categories = classList.compactMap { dict in
+                            guard let typeId = dict["type_id"] as? String ?? (dict["type_id"] as? Int).map(String.init),
+                                  let typeName = dict["type_name"] as? String else { return nil }
+                            return VideoCategory(typeId: typeId, typeName: typeName)
+                        }
+                    }
+                } else {
+                    result = await SpiderEngine.shared.execute(jsCode: code, method: "category", args: ["id": typeId, "pg": 1], spiderKey: site.spiderKey)
+                }
                 guard loadedSiteKey == site.key else { return }
                 let parsed = parseSpiderList(result)
+                print("[ContentViewModel] Parsed: \(parsed.list.count) items, page=\(parsed.page)/\(parsed.pageCount), categories=\(self.categories.count)")
                 self.videoList = parsed.list
                 self.totalPages = max(1, parsed.pageCount)
                 self.currentPage = parsed.page
