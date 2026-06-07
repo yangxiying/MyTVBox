@@ -119,10 +119,23 @@ final class WebViewSpiderEngine {
         webView.evaluateJavaScript("""
         (async function(){
             try{
-                var e=module.exports;
-                if(e&&typeof e.start==='function'){await e.start();console.log('[init] done fn='+(typeof window.fn));}
-                else console.log('[init] no start');
-            }catch(err){console.log('[init] err='+err.message);}
+                var diag = 'scripts=' + document.querySelectorAll('script').length
+                    + ' k$e=' + (typeof k$e) + ' module=' + (typeof module)
+                    + ' exports_keys=' + JSON.stringify(Object.keys(module.exports||{}))
+                    + ' Fpr=' + (typeof Fpr) + ' Lpr=' + (typeof Lpr)
+                    + ' fn=' + (typeof window.fn) + ' err=' + (window.__err__||'none');
+                console.log('[init-diag] ' + diag);
+                var e = module.exports;
+                if(e && typeof e.start === 'function'){
+                    console.log('[init] calling start()...');
+                    await e.start();
+                    console.log('[init] done fn=' + (typeof window.fn));
+                } else {
+                    console.log('[init] no start, exports=' + JSON.stringify(Object.keys(e||{})));
+                }
+            }catch(err){
+                console.log('[init] err=' + err.message + ' stack=' + (err.stack||'').substring(0,200));
+            }
         })();
         """, completionHandler: nil)
     }
