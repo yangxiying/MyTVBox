@@ -79,6 +79,7 @@ final class CatPawConfigBuilder {
                 // 未知 CMS 的 spider：标记为 type=3，存储 bundle code 供 JS 引擎执行
                 let siteKey = "catpaw_\(meta.key)"
                 SpiderContextManager.shared.registerModuleCode(key: siteKey, code: jsCode)
+                print("[CatPawConfigBuilder] Registered t3 moduleCode for key=\(siteKey), codeLen=\(jsCode.count)")
                 sites.append(Site(
                     key: siteKey,
                     name: meta.name,

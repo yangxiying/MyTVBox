@@ -63,31 +63,41 @@ final class ContentViewModel: ObservableObject {
         let typeId = category?.typeId ?? ""
         print("[ContentViewModel] loadVideoList: key=\(site.key) type=\(site.type) typeId=\(typeId.isEmpty ? "(empty)" : typeId) spiderKey=\(site.spiderKey ?? "nil")")
         do {
-            if site.type == 3, let code = SpiderContextManager.shared.moduleCode(for: site.key) {
-                print("[ContentViewModel] Spider path: codeLen=\(code.count)")
-                let result: [String: Any]?
-                if typeId.isEmpty {
-                    // 无分类时调 home() 获取默认视频列表
-                    print("[ContentViewModel] Calling home()...")
-                    result = await SpiderEngine.shared.execute(jsCode: code, method: "home", args: [:], spiderKey: site.spiderKey)
-                    print("[ContentViewModel] home() result: \(result != nil ? "\(result!.count) keys: \(Array(result!.keys))" : "nil")")
-                    // 同时解析分类
-                    if let classList = result?["class"] as? [[String: Any]] {
-                        self.categories = classList.compactMap { dict in
-                            guard let typeId = dict["type_id"] as? String ?? (dict["type_id"] as? Int).map(String.init),
-                                  let typeName = dict["type_name"] as? String else { return nil }
-                            return VideoCategory(typeId: typeId, typeName: typeName)
+            if site.type == 3 {
+                let code = SpiderContextManager.shared.moduleCode(for: site.key)
+                print("[ContentViewModel] t3 check: key=\(site.key) hasCode=\(code != nil) codeLen=\(code?.count ?? 0)")
+                if let code = code {
+                    print("[ContentViewModel] Spider path: codeLen=\(code.count)")
+                    let result: [String: Any]?
+                    if typeId.isEmpty {
+                        print("[ContentViewModel] Calling home()...")
+                        result = await SpiderEngine.shared.execute(jsCode: code, method: "home", args: [:], spiderKey: site.spiderKey)
+                        print("[ContentViewModel] home() result: \(result != nil ? "\(result!.count) keys: \(Array(result!.keys))" : "nil")")
+                        if let classList = result?["class"] as? [[String: Any]] {
+                            self.categories = classList.compactMap { dict in
+                                guard let typeId = dict["type_id"] as? String ?? (dict["type_id"] as? Int).map(String.init),
+                                      let typeName = dict["type_name"] as? String else { return nil }
+                                return VideoCategory(typeId: typeId, typeName: typeName)
+                            }
                         }
+                    } else {
+                        result = await SpiderEngine.shared.execute(jsCode: code, method: "category", args: ["id": typeId, "pg": 1], spiderKey: site.spiderKey)
                     }
+                    guard loadedSiteKey == site.key else { return }
+                    let parsed = parseSpiderList(result)
+                    print("[ContentViewModel] Parsed: \(parsed.list.count) items, page=\(parsed.page)/\(parsed.pageCount), categories=\(self.categories.count)")
+                    self.videoList = parsed.list
+                    self.totalPages = max(1, parsed.pageCount)
+                    self.currentPage = parsed.page
                 } else {
-                    result = await SpiderEngine.shared.execute(jsCode: code, method: "category", args: ["id": typeId, "pg": 1], spiderKey: site.spiderKey)
+                    print("[ContentViewModel] t3 NO moduleCode for key=\(site.key)")
+                    // 无 moduleCode，回退到 CMS API
+                    let resp = try await apiService.fetchVideoList(site: site, categoryId: typeId, page: 1)
+                    guard loadedSiteKey == site.key else { return }
+                    self.videoList = resp.list ?? []
+                    self.totalPages = max(1, resp.pagecount ?? 1)
+                    self.currentPage = resp.page ?? 1
                 }
-                guard loadedSiteKey == site.key else { return }
-                let parsed = parseSpiderList(result)
-                print("[ContentViewModel] Parsed: \(parsed.list.count) items, page=\(parsed.page)/\(parsed.pageCount), categories=\(self.categories.count)")
-                self.videoList = parsed.list
-                self.totalPages = max(1, parsed.pageCount)
-                self.currentPage = parsed.page
             } else {
                 let resp = try await apiService.fetchVideoList(site: site, categoryId: typeId, page: 1)
                 guard loadedSiteKey == site.key else { return }
