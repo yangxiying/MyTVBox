@@ -1,17 +1,11 @@
 import Foundation
 import WebKit
+import os.log
+
+private let spiderLog = OSLog(subsystem: "com.mytvbox.spider", category: "debug")
 
 private func flog(_ s: String) {
-    NSLog("[SpiderEngine] \(s)")
-    guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
-    let url = docs.appendingPathComponent("spider_debug.log")
-    let line = "\(Date()): \(s)\n"
-    guard let data = line.data(using: .utf8) else { return }
-    if let fh = try? FileHandle(forWritingTo: url) {
-        fh.seekToEndOfFile(); fh.write(data); try? fh.close()
-    } else {
-        try? data.write(to: url)
-    }
+    os_log("%{public}s", log: spiderLog, type: .default, s)
 }
 
 /// CatPaw Spider JS 执行引擎（WKWebView 版本，iOS 17+）
