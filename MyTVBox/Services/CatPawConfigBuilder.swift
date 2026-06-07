@@ -174,10 +174,9 @@ final class CatPawConfigBuilder {
         }
         return nil
     }
-}
 
-/// 禁止自动重定向的 URLSession delegate
-private class NoRedirectDelegate: NSObject, URLSessionTaskDelegate {
+    /// 禁止自动重定向的 URLSession delegate
+    private class NoRedirectDelegate: NSObject, URLSessionTaskDelegate {
     func urlSession(
         _ session: URLSession,
         task: URLSessionTask,
@@ -357,7 +356,7 @@ private class NoRedirectDelegate: NSObject, URLSessionTaskDelegate {
         let portStr = url.port.map { ":\($0)" } ?? ""
         let configURL = "\(scheme)://\(authPrefix)\(host)\(portStr)/config"
 
-        guard let data = try? await network.data(from: configURL),
+        guard let data = try? await self.network.data(from: configURL),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return nil
         }
